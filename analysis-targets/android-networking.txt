@@ -1,0 +1,3015 @@
+===== apk-analysis/decompiled/sources/com/ninjatech/minecraftlanbridge/service/BridgeService.java =====
+package com.ninjatech.minecraftlanbridge.service;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Build;
+import android.os.IBinder;
+import androidx.core.app.NotificationCompat;
+import com.ninjatech.minecraftlanbridge.C0948R;
+import com.ninjatech.minecraftlanbridge.config.BridgeConfig;
+import com.ninjatech.minecraftlanbridge.p001ui.MainActivity;
+import com.ninjatech.minecraftlanbridge.relay.BridgeState;
+import com.ninjatech.minecraftlanbridge.relay.BridgeStatus;
+import com.ninjatech.minecraftlanbridge.relay.HttpProxyServer;
+import com.ninjatech.minecraftlanbridge.relay.RelayStartException;
+import com.ninjatech.minecraftlanbridge.relay.TcpRelayEngine;
+import com.ninjatech.minecraftlanbridge.relay.UdpRelayEngine;
+import com.ninjatech.minecraftlanbridge.util.NetworkUtils;
+import java.util.concurrent.CancellationException;
+import kotlin.Metadata;
+import kotlin.ResultKt;
+import kotlin.Unit;
+import kotlin.coroutines.Continuation;
+import kotlin.coroutines.intrinsics.IntrinsicsKt;
+import kotlin.coroutines.jvm.internal.DebugMetadata;
+import kotlin.coroutines.jvm.internal.SuspendLambda;
+import kotlin.jvm.functions.Function2;
+import kotlin.jvm.internal.DefaultConstructorMarker;
+import kotlin.jvm.internal.Intrinsics;
+import kotlinx.coroutines.BuildersKt__Builders_commonKt;
+import kotlinx.coroutines.CoroutineScope;
+import kotlinx.coroutines.CoroutineScopeKt;
+import kotlinx.coroutines.Dispatchers;
+import kotlinx.coroutines.Job;
+import kotlinx.coroutines.SupervisorKt;
+import kotlinx.coroutines.flow.FlowKt;
+import org.xbill.DNS.Type;
+import org.xbill.DNS.WKSRecord;
+
+/* compiled from: BridgeService.kt */
+@Metadata(m145d1 = {"\u0000X\n\u0002\u0018\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0010\u0002\n\u0000\n\u0002\u0010\u000e\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0010\b\n\u0002\b\u000e\u0018\u0000 )2\u00020\u0001:\u0001)B\u0005¢\u0006\u0002\u0010\u0002J\u0010\u0010\r\u001a\u00020\u000e2\u0006\u0010\u000f\u001a\u00020\u0010H\u0002J\b\u0010\u0011\u001a\u00020\u0012H\u0002J\u0010\u0010\u0013\u001a\u00020\u00142\u0006\u0010\u0003\u001a\u00020\u0004H\u0002J\u0014\u0010\u0015\u001a\u0004\u0018\u00010\u00162\b\u0010\u0017\u001a\u0004\u0018\u00010\u0018H\u0016J\b\u0010\u0019\u001a\u00020\u0012H\u0016J\b\u0010\u001a\u001a\u00020\u0012H\u0016J\"\u0010\u001b\u001a\u00020\u001c2\b\u0010\u0017\u001a\u0004\u0018\u00010\u00182\u0006\u0010\u001d\u001a\u00020\u001c2\u0006\u0010\u001e\u001a\u00020\u001cH\u0016J7\u0010\u001f\u001a\u00020\u00122\u0006\u0010 \u001a\u00020\u00142\b\u0010!\u001a\u0004\u0018\u00010\u001c2\u0006\u0010\"\u001a\u00020\u001c2\u0006\u0010#\u001a\u00020\u001c2\u0006\u0010$\u001a\u00020\u001cH\u0002¢\u0006\u0002\u0010%J\u0010\u0010&\u001a\u00020\u00122\u0006\u0010\u000f\u001a\u00020\u0010H\u0002J\b\u0010'\u001a\u00020\u0012H\u0002J\u0010\u0010(\u001a\u00020\u00122\u0006\u0010\u000f\u001a\u00020\u0010H\u0002R\u000e\u0010\u0003\u001a\u00020\u0004X\u0082\u0004¢\u0006\u0002\n\u0000R\u000e\u0010\u0005\u001a\u00020\u0006X\u0082\u0004¢\u0006\u0002\n\u0000R\u000e\u0010\u0007\u001a\u00020\bX\u0082\u0004¢\u0006\u0002\n\u0000R\u0010\u0010\t\u001a\u0004\u0018\u00010\nX\u0082\u000e¢\u0006\u0002\n\u0000R\u000e\u0010\u000b\u001a\u00020\fX\u0082\u0004¢\u0006\u0002\n\u0000¨\u0006*"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/service/BridgeService;", "Landroid/app/Service;", "()V", "engine", "Lcom/ninjatech/minecraftlanbridge/relay/TcpRelayEngine;", "proxy", "Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer;", "serviceScope", "Lkotlinx/coroutines/CoroutineScope;", "statusCollectorJob", "Lkotlinx/coroutines/Job;", "udpRelay", "Lcom/ninjatech/minecraftlanbridge/relay/UdpRelayEngine;", "buildNotification", "Landroid/app/Notification;", NotificationCompat.CATEGORY_STATUS, "Lcom/ninjatech/minecraftlanbridge/relay/BridgeStatus;", "createNotificationChannel", "", "lanHost", "", "onBind", "Landroid/os/IBinder;", "intent", "Landroid/content/Intent;", "onCreate", "onDestroy", "onStartCommand", "", "flags", "startId", "startBridge", "host", "remotePort", "localPort", "proxyPort", "udpRelayPort", "(Ljava/lang/String;Ljava/lang/Integer;III)V", "startInForeground", "stopBridge", "updateNotification", "Companion", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+/* loaded from: classes4.dex */
+public final class BridgeService extends Service {
+    public static final String ACTION_START = "com.ninjatech.minecraftlanbridge.START";
+    public static final String ACTION_STOP = "com.ninjatech.minecraftlanbridge.STOP";
+    public static final String ACTION_STOP_FROM_NOTIF = "com.ninjatech.minecraftlanbridge.STOP_NOTIF";
+    private static final String CHANNEL_ID = "bridge_service_channel";
+
+    /* renamed from: Companion, reason: from kotlin metadata */
+    public static final Companion INSTANCE = new Companion(null);
+    public static final String EXTRA_LOCAL_PORT = "local_port";
+    public static final String EXTRA_PROXY_PORT = "proxy_port";
+    public static final String EXTRA_REMOTE_HOST = "remote_host";
+    public static final String EXTRA_REMOTE_PORT = "remote_port";
+    public static final String EXTRA_UDP_RELAY_PORT = "udp_relay_port";
+    public static final int NOTIF_ID = 4242;
+    private Job statusCollectorJob;
+    private final TcpRelayEngine engine = TcpRelayEngine.INSTANCE.getShared();
+    private final HttpProxyServer proxy = HttpProxyServer.INSTANCE.getShared();
+    private final UdpRelayEngine udpRelay = UdpRelayEngine.INSTANCE.getShared();
+    private final CoroutineScope serviceScope = CoroutineScopeKt.CoroutineScope(SupervisorKt.SupervisorJob$default((Job) null, 1, (Object) null).plus(Dispatchers.getMain().getImmediate()));
+
+    @Override // android.app.Service
+    public IBinder onBind(Intent intent) {
+        return null;
+    }
+
+    @Override // android.app.Service
+    public void onCreate() {
+        super.onCreate();
+        createNotificationChannel();
+        this.statusCollectorJob = BuildersKt__Builders_commonKt.launch$default(this.serviceScope, null, null, new C09671(null), 3, null);
+    }
+
+    /* compiled from: BridgeService.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$onCreate$1", m162f = "BridgeService.kt", m163i = {}, m164l = {Type.CDS}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+    /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$onCreate$1 */
+    static final class C09671 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        int label;
+
+        C09671(Continuation<? super C09671> continuation) {
+            super(2, continuation);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            return BridgeService.this.new C09671(continuation);
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09671) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        /* compiled from: BridgeService.kt */
+        @Metadata(m145d1 = {"\u0000\f\n\u0000\n\u0002\u0010\u0002\n\u0000\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u00012\u0006\u0010\u0002\u001a\u00020\u0003H\u008a@"}, m146d2 = {"<anonymous>", "", "it", "Lcom/ninjatech/minecraftlanbridge/relay/BridgeStatus;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+        @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$onCreate$1$1", m162f = "BridgeService.kt", m163i = {}, m164l = {}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+        /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$onCreate$1$1, reason: invalid class name */
+        static final class AnonymousClass1 extends SuspendLambda implements Function2<BridgeStatus, Continuation<? super Unit>, Object> {
+            /* synthetic */ Object L$0;
+            int label;
+            final /* synthetic */ BridgeService this$0;
+
+            /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+            AnonymousClass1(BridgeService bridgeService, Continuation<? super AnonymousClass1> continuation) {
+                super(2, continuation);
+                this.this$0 = bridgeService;
+            }
+
+            @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+            public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+                AnonymousClass1 anonymousClass1 = new AnonymousClass1(this.this$0, continuation);
+                anonymousClass1.L$0 = obj;
+                return anonymousClass1;
+            }
+
+            @Override // kotlin.jvm.functions.Function2
+            public final Object invoke(BridgeStatus bridgeStatus, Continuation<? super Unit> continuation) {
+                return ((AnonymousClass1) create(bridgeStatus, continuation)).invokeSuspend(Unit.INSTANCE);
+            }
+
+            @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+            public final Object invokeSuspend(Object obj) {
+                IntrinsicsKt.getCOROUTINE_SUSPENDED();
+                switch (this.label) {
+                    case 0:
+                        ResultKt.throwOnFailure(obj);
+                        BridgeStatus it = (BridgeStatus) this.L$0;
+                        this.this$0.updateNotification(it);
+                        return Unit.INSTANCE;
+                    default:
+                        throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+                }
+            }
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Object invokeSuspend(Object $result) {
+            Object coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            switch (this.label) {
+                case 0:
+                    ResultKt.throwOnFailure($result);
+                    this.label = 1;
+                    if (FlowKt.collectLatest(BridgeService.this.engine.getStatus(), new AnonymousClass1(BridgeService.this, null), this) != coroutine_suspended) {
+                        break;
+                    } else {
+                        return coroutine_suspended;
+                    }
+                case 1:
+                    ResultKt.throwOnFailure($result);
+                    break;
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+            return Unit.INSTANCE;
+        }
+    }
+
+    @Override // android.app.Service
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        String action = intent != null ? intent.getAction() : null;
+        if (action != null) {
+            switch (action.hashCode()) {
+                case -1412188668:
+                    if (action.equals(ACTION_START)) {
+                        String host = intent.getStringExtra(EXTRA_REMOTE_HOST);
+                        if (host == null) {
+                            return 2;
+                        }
+                        int remotePortRaw = intent.getIntExtra(EXTRA_REMOTE_PORT, -1);
+                        Integer remotePort = remotePortRaw != -1 ? Integer.valueOf(remotePortRaw) : null;
+                        int localPort = intent.getIntExtra(EXTRA_LOCAL_PORT, -1);
+                        int proxyPort = intent.getIntExtra(EXTRA_PROXY_PORT, -1);
+                        int udpRelayPort = intent.getIntExtra(EXTRA_UDP_RELAY_PORT, -2);
+                        startBridge(host, remotePort, localPort, proxyPort, udpRelayPort);
+                        return 1;
+                    }
+                    return 1;
+                case -1264906223:
+                    if (!action.equals(ACTION_STOP_FROM_NOTIF)) {
+                        return 1;
+                    }
+                    break;
+                case -184101376:
+                    if (!action.equals(ACTION_STOP)) {
+                        return 1;
+                    }
+                    break;
+                default:
+                    return 1;
+            }
+            stopBridge();
+            return 1;
+        }
+        return 1;
+    }
+
+    private final void startBridge(String host, Integer remotePort, int localPort, int proxyPort, int udpRelayPort) {
+        startInForeground(this.engine.getStatus().getValue());
+        BuildersKt__Builders_commonKt.launch$default(this.serviceScope, null, null, new C09691(host, remotePort, localPort, this, proxyPort, udpRelayPort, null), 3, null);
+    }
+
+    /* compiled from: BridgeService.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1", m162f = "BridgeService.kt", m163i = {1}, m164l = {99, 112, WKSRecord.Service.NETBIOS_SSN}, m165m = "invokeSuspend", m166n = {"lanIp"}, m167s = {"L$0"})
+    /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1 */
+    static final class C09691 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        final /* synthetic */ String $host;
+        final /* synthetic */ int $localPort;
+        final /* synthetic */ int $proxyPort;
+        final /* synthetic */ Integer $remotePort;
+        final /* synthetic */ int $udpRelayPort;
+        Object L$0;
+        int label;
+        final /* synthetic */ BridgeService this$0;
+
+        /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+        C09691(String str, Integer num, int i, BridgeService bridgeService, int i2, int i3, Continuation<? super C09691> continuation) {
+            super(2, continuation);
+            this.$host = str;
+            this.$remotePort = num;
+            this.$localPort = i;
+            this.this$0 = bridgeService;
+            this.$proxyPort = i2;
+            this.$udpRelayPort = i3;
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            return new C09691(this.$host, this.$remotePort, this.$localPort, this.this$0, this.$proxyPort, this.$udpRelayPort, continuation);
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09691) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        /* JADX WARN: Multi-variable type inference failed */
+        /* JADX WARN: Not initialized variable reg: 6, insn: 0x00f3: IGET (r9 I:com.ninjatech.minecraftlanbridge.service.BridgeService) = 
+          (r6 I:com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1 A[D('this' com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1)])
+         A[Catch: Exception -> 0x0041, RelayStartException -> 0x0044, TRY_ENTER] (LINE:127) com.ninjatech.minecraftlanbridge.service.BridgeService.startBridge.1.this$0 com.ninjatech.minecraftlanbridge.service.BridgeService, block:B:47:0x00f3 */
+        /* JADX WARN: Not initialized variable reg: 6, insn: 0x0118: IGET (r9 I:com.ninjatech.minecraftlanbridge.service.BridgeService) = 
+          (r6 I:com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1 A[D('this' com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1)])
+         A[Catch: Exception -> 0x0041, RelayStartException -> 0x0044] (LINE:125) com.ninjatech.minecraftlanbridge.service.BridgeService.startBridge.1.this$0 com.ninjatech.minecraftlanbridge.service.BridgeService, block:B:48:0x0118 */
+        /* JADX WARN: Removed duplicated region for block: B:33:0x00a6 A[Catch: Exception -> 0x0033, RelayStartException -> 0x0036, TRY_ENTER, TryCatch #7 {RelayStartException -> 0x0036, Exception -> 0x0033, blocks: (B:14:0x002e, B:33:0x00a6, B:39:0x00bd, B:41:0x00d7, B:43:0x00db), top: B:77:0x000b }] */
+        /* JADX WARN: Removed duplicated region for block: B:81:0x0141 A[EXC_TOP_SPLITTER, SYNTHETIC] */
+        /* JADX WARN: Type inference failed for: r1v0, types: [java.lang.Object] */
+        /* JADX WARN: Type inference failed for: r1v10 */
+        /* JADX WARN: Type inference failed for: r1v15 */
+        /* JADX WARN: Type inference failed for: r1v20 */
+        /* JADX WARN: Type inference failed for: r1v21 */
+        /* JADX WARN: Type inference failed for: r1v5 */
+        /* JADX WARN: Type inference failed for: r6v2, types: [com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1] */
+        /* JADX WARN: Type inference failed for: r6v3, types: [com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1] */
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        /*
+            Code decompiled incorrectly, please refer to instructions dump.
+        */
+        public final Object invokeSuspend(Object obj) throws Throwable {
+            ?? r6;
+            ?? r62;
+            C09691 c09691;
+            String localHost;
+            Object obj2;
+            C09691 c096912;
+            C09691 c096913;
+            C09691 c096914;
+            int i;
+            ?? coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            try {
+                try {
+                    try {
+                    } catch (RelayStartException e) {
+                        e = e;
+                        c09691 = coroutine_suspended;
+                        c09691.this$0.engine.getLog().log("Startup failed: " + e.getMessage());
+                        c09691.this$0.stopBridge();
+                        return Unit.INSTANCE;
+                    } catch (Exception e2) {
+                        e = e2;
+                        c09691 = coroutine_suspended;
+                        c09691.this$0.engine.getLog().log("Startup error: " + e.getMessage());
+                        c09691.this$0.stopBridge();
+                        return Unit.INSTANCE;
+                    }
+                } catch (RelayStartException e3) {
+                    r62.this$0.engine.getLog().log("Auth proxy failed to start: " + e3.getMessage());
+                    c09691 = r62;
+                } catch (Exception e4) {
+                    r6.this$0.engine.getLog().log("Auth proxy error: " + e4.getMessage());
+                    c09691 = r6;
+                }
+            } catch (RelayStartException e5) {
+                e = e5;
+                c09691.this$0.engine.getLog().log("Startup failed: " + e.getMessage());
+                c09691.this$0.stopBridge();
+                return Unit.INSTANCE;
+            } catch (Exception e6) {
+                e = e6;
+                c09691.this$0.engine.getLog().log("Startup error: " + e.getMessage());
+                c09691.this$0.stopBridge();
+                return Unit.INSTANCE;
+            }
+            switch (this.label) {
+                case 0:
+                    ResultKt.throwOnFailure(obj);
+                    C09691 c096915 = this;
+                    obj2 = obj;
+                    TcpRelayEngine.RelayConfig relayConfig = new TcpRelayEngine.RelayConfig(c096915.$host, c096915.$remotePort, c096915.$localPort, null);
+                    relayConfig.setAppContext(c096915.this$0.getApplicationContext());
+                    c096915.label = 1;
+                    Object objStart = c096915.this$0.engine.start(relayConfig, c096915);
+                    c096914 = c096915;
+                    if (objStart == coroutine_suspended) {
+                        return coroutine_suspended;
+                    }
+                    new BridgeConfig(c096914.this$0).save(c096914.$host, c096914.$remotePort, c096914.$localPort, c096914.$proxyPort, c096914.$udpRelayPort);
+                    localHost = c096914.this$0.engine.getStatus().getValue().getLocalHost();
+                    i = c096914.$proxyPort;
+                    c09691 = c096914;
+                    if (i > 0) {
+                        HttpProxyServer httpProxyServer = c096914.this$0.proxy;
+                        String str = localHost;
+                        if (str.length() == 0) {
+                            str = null;
+                        }
+                        String str2 = str;
+                        int i2 = c096914.$proxyPort;
+                        String strLanHost = c096914.this$0.lanHost(c096914.this$0.engine);
+                        int i3 = c096914.$proxyPort;
+                        int i4 = c096914.$localPort;
+                        int i5 = c096914.$udpRelayPort > 0 ? c096914.$udpRelayPort : 0;
+                        c096914.L$0 = localHost;
+                        c096914.label = 2;
+                        Object objStart2 = httpProxyServer.start(new HttpProxyServer.ProxyConfig(str2, i2, new HttpProxyServer.DiscoveryInfo(strLanHost, i3, i4, i5)), c096914);
+                        c09691 = c096914;
+                        if (objStart2 == coroutine_suspended) {
+                            return coroutine_suspended;
+                        }
+                    }
+                    if (c09691.$udpRelayPort > 0) {
+                        try {
+                            UdpRelayEngine udpRelayEngine = c09691.this$0.udpRelay;
+                            String str3 = localHost;
+                            if ((str3.length() == 0 ? 1 : null) != null) {
+                                str3 = null;
+                            }
+                            c09691.L$0 = null;
+                            c09691.label = 3;
+                            if (udpRelayEngine.start(new UdpRelayEngine.UdpRelayConfig((String) str3, c09691.$udpRelayPort), c09691) == coroutine_suspended) {
+                                return coroutine_suspended;
+                            }
+                            c096913 = c09691;
+                            obj = obj2;
+                        } catch (RelayStartException e7) {
+                            e = e7;
+                            c096912 = c09691;
+                            obj = obj2;
+                            c096912.this$0.engine.getLog().log("UDP relay failed to start: " + e.getMessage());
+                            coroutine_suspended = c096912;
+                            return Unit.INSTANCE;
+                        } catch (Exception e8) {
+                            e = e8;
+                            c096912 = c09691;
+                            obj = obj2;
+                            c096912.this$0.engine.getLog().log("UDP relay error: " + e.getMessage());
+                            coroutine_suspended = c096912;
+                            return Unit.INSTANCE;
+                        }
+                    }
+                    return Unit.INSTANCE;
+                case 1:
+                    c096914 = this;
+                    obj2 = obj;
+                    ResultKt.throwOnFailure(obj2);
+                    new BridgeConfig(c096914.this$0).save(c096914.$host, c096914.$remotePort, c096914.$localPort, c096914.$proxyPort, c096914.$udpRelayPort);
+                    localHost = c096914.this$0.engine.getStatus().getValue().getLocalHost();
+                    i = c096914.$proxyPort;
+                    c09691 = c096914;
+                    if (i > 0) {
+                    }
+                    if (c09691.$udpRelayPort > 0) {
+                    }
+                    return Unit.INSTANCE;
+                case 2:
+                    C09691 c096916 = this;
+                    obj2 = obj;
+                    localHost = (String) c096916.L$0;
+                    ResultKt.throwOnFailure(obj2);
+                    c09691 = c096916;
+                    if (c09691.$udpRelayPort > 0) {
+                    }
+                    return Unit.INSTANCE;
+                case 3:
+                    c096912 = this;
+                    obj = obj;
+                    try {
+                        ResultKt.throwOnFailure(obj);
+                        c096913 = c096912;
+                    } catch (RelayStartException e9) {
+                        e = e9;
+                        c096912.this$0.engine.getLog().log("UDP relay failed to start: " + e.getMessage());
+                        coroutine_suspended = c096912;
+                        return Unit.INSTANCE;
+                    } catch (Exception e10) {
+                        e = e10;
+                        c096912.this$0.engine.getLog().log("UDP relay error: " + e.getMessage());
+                        coroutine_suspended = c096912;
+                        return Unit.INSTANCE;
+                    }
+                    return Unit.INSTANCE;
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public final String lanHost(TcpRelayEngine engine) {
+        String localHost = engine.getStatus().getValue().getLocalHost();
+        if (localHost.length() == 0) {
+            String bestLanIpv4 = NetworkUtils.INSTANCE.getBestLanIpv4();
+            if (bestLanIpv4 == null) {
+                bestLanIpv4 = "";
+            }
+            localHost = bestLanIpv4;
+        }
+        return localHost;
+    }
+
+    /* compiled from: BridgeService.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$stopBridge$1", m162f = "BridgeService.kt", m163i = {}, m164l = {170, 172, 173}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+    /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$stopBridge$1 */
+    static final class C09701 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        int label;
+
+        C09701(Continuation<? super C09701> continuation) {
+            super(2, continuation);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            return BridgeService.this.new C09701(continuation);
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09701) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        /* JADX WARN: Multi-variable type inference failed */
+        /* JADX WARN: Removed duplicated region for block: B:25:0x0073 A[RETURN] */
+        /* JADX WARN: Removed duplicated region for block: B:30:0x00ab A[RETURN] */
+        /* JADX WARN: Removed duplicated region for block: B:31:0x00ac  */
+        /* JADX WARN: Type inference failed for: r1v0, types: [int] */
+        /* JADX WARN: Type inference failed for: r1v10 */
+        /* JADX WARN: Type inference failed for: r1v11 */
+        /* JADX WARN: Type inference failed for: r1v12 */
+        /* JADX WARN: Type inference failed for: r1v13 */
+        /* JADX WARN: Type inference failed for: r1v14 */
+        /* JADX WARN: Type inference failed for: r1v5 */
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        /*
+            Code decompiled incorrectly, please refer to instructions dump.
+        */
+        public final Object invokeSuspend(Object obj) throws Throwable {
+            Object objStop;
+            C09701 c09701;
+            Object coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            C09701 c097012 = this.label;
+            try {
+                try {
+                } catch (Exception e) {
+                    BridgeService.this.engine.getLog().log("Proxy stop error: " + e.getMessage());
+                }
+            } catch (Exception e2) {
+                BridgeService.this.engine.getLog().log("UDP relay stop error: " + e2.getMessage());
+            }
+            switch (c097012) {
+                case 0:
+                    ResultKt.throwOnFailure(obj);
+                    C09701 c097013 = this;
+                    c097013.label = 1;
+                    Object objStop2 = BridgeService.this.udpRelay.stop(c097013);
+                    c097012 = c097013;
+                    if (objStop2 == coroutine_suspended) {
+                        return coroutine_suspended;
+                    }
+                    c097012.label = 2;
+                    objStop = BridgeService.this.proxy.stop(c097012);
+                    c097012 = c097012;
+                    if (objStop == coroutine_suspended) {
+                        return coroutine_suspended;
+                    }
+                    c097012.label = 3;
+                    if (BridgeService.this.engine.stop(c097012) == coroutine_suspended) {
+                        return coroutine_suspended;
+                    }
+                    c09701 = c097012;
+                    BridgeService.this.stopForeground(1);
+                    BridgeService.this.stopSelf();
+                    return Unit.INSTANCE;
+                case 1:
+                    c097012 = this;
+                    ResultKt.throwOnFailure(obj);
+                    c097012.label = 2;
+                    objStop = BridgeService.this.proxy.stop(c097012);
+                    c097012 = c097012;
+                    if (objStop == coroutine_suspended) {
+                    }
+                    c097012.label = 3;
+                    if (BridgeService.this.engine.stop(c097012) == coroutine_suspended) {
+                    }
+                    break;
+                case 2:
+                    c097012 = this;
+                    ResultKt.throwOnFailure(obj);
+                    c097012.label = 3;
+                    if (BridgeService.this.engine.stop(c097012) == coroutine_suspended) {
+                    }
+                    break;
+                case 3:
+                    c09701 = this;
+                    ResultKt.throwOnFailure(obj);
+                    BridgeService.this.stopForeground(1);
+                    BridgeService.this.stopSelf();
+                    return Unit.INSTANCE;
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public final void stopBridge() {
+        BuildersKt__Builders_commonKt.launch$default(this.serviceScope, null, null, new C09701(null), 3, null);
+    }
+
+    private final void startInForeground(BridgeStatus status) {
+        Notification notification = buildNotification(status);
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(NOTIF_ID, notification, 1);
+        } else {
+            startForeground(NOTIF_ID, notification);
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public final void updateNotification(BridgeStatus status) {
+        if (status.getState() == BridgeState.STOPPED) {
+            return;
+        }
+        Object systemService = getSystemService("notification");
+        Intrinsics.checkNotNull(systemService, "null cannot be cast to non-null type android.app.NotificationManager");
+        NotificationManager nm = (NotificationManager) systemService;
+        nm.notify(NOTIF_ID, buildNotification(status));
+    }
+
+    private final Notification buildNotification(BridgeStatus status) {
+        String text;
+        if ((status.getLocalHost().length() > 0) && status.getLocalPort() != 0) {
+            text = getString(C0948R.string.notif_text, new Object[]{status.getLocalHost(), Integer.valueOf(status.getLocalPort())});
+        } else {
+            text = getString(C0948R.string.app_name);
+        }
+        Intrinsics.checkNotNull(text);
+        String subText = getString(C0948R.string.notif_text_conns, new Object[]{Integer.valueOf(status.getActiveConnections())});
+        Intrinsics.checkNotNullExpressionValue(subText, "getString(...)");
+        Intent openIntent = new Intent(this, (Class<?>) MainActivity.class);
+        openIntent.setFlags(603979776);
+        PendingIntent openPi = PendingIntent.getActivity(this, 0, openIntent, 201326592);
+        Intent stopIntent = new Intent(this, (Class<?>) BridgeService.class);
+        stopIntent.setAction(ACTION_STOP_FROM_NOTIF);
+        PendingIntent stopPi = PendingIntent.getService(this, 1, stopIntent, 201326592);
+        Notification notificationBuild = new NotificationCompat.Builder(this, CHANNEL_ID).setContentTitle(getString(C0948R.string.notif_title)).setContentText(text).setSubText(subText).setSmallIcon(C0948R.drawable.ic_bridge).setContentIntent(openPi).addAction(C0948R.drawable.ic_bridge, getString(C0948R.string.notif_stop), stopPi).setOngoing(true).setOnlyAlertOnce(true).setShowWhen(false).setCategory(NotificationCompat.CATEGORY_SERVICE).build();
+        Intrinsics.checkNotNullExpressionValue(notificationBuild, "build(...)");
+        return notificationBuild;
+    }
+
+    private final void createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= 26) {
+            NotificationChannel channel = new NotificationChannel(CHANNEL_ID, getString(C0948R.string.notif_channel_name), 2);
+            channel.setDescription(getString(C0948R.string.notif_channel_desc));
+            channel.setShowBadge(false);
+            Object systemService = getSystemService("notification");
+            Intrinsics.checkNotNull(systemService, "null cannot be cast to non-null type android.app.NotificationManager");
+            NotificationManager nm = (NotificationManager) systemService;
+            nm.createNotificationChannel(channel);
+        }
+    }
+
+    @Override // android.app.Service
+    public void onDestroy() {
+        super.onDestroy();
+        Job job = this.statusCollectorJob;
+        if (job != null) {
+            Job.DefaultImpls.cancel$default(job, (CancellationException) null, 1, (Object) null);
+        }
+        BuildersKt__Builders_commonKt.launch$default(this.serviceScope, null, null, new C09681(null), 3, null);
+        CoroutineScopeKt.cancel$default(this.serviceScope, null, 1, null);
+    }
+
+    /* compiled from: BridgeService.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$onDestroy$1", m162f = "BridgeService.kt", m163i = {}, m164l = {261, 262, 263}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+    /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$onDestroy$1 */
+    static final class C09681 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        int label;
+
+        C09681(Continuation<? super C09681> continuation) {
+            super(2, continuation);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            return BridgeService.this.new C09681(continuation);
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09681) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        /* JADX WARN: Multi-variable type inference failed */
+        /* JADX WARN: Removed duplicated region for block: B:24:0x004e A[RETURN] */
+        /* JADX WARN: Removed duplicated region for block: B:27:0x0062 A[RETURN] */
+        /* JADX WARN: Removed duplicated region for block: B:28:0x0063  */
+        /* JADX WARN: Type inference failed for: r1v10 */
+        /* JADX WARN: Type inference failed for: r1v11 */
+        /* JADX WARN: Type inference failed for: r1v12 */
+        /* JADX WARN: Type inference failed for: r1v5 */
+        /* JADX WARN: Type inference failed for: r1v8 */
+        /* JADX WARN: Type inference failed for: r1v9 */
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        /*
+            Code decompiled incorrectly, please refer to instructions dump.
+        */
+        public final Object invokeSuspend(Object obj) throws Throwable {
+            Object objStop;
+            Object coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            C09681 c09681 = this.label;
+            switch (c09681) {
+                case 0:
+                    ResultKt.throwOnFailure(obj);
+                    C09681 c096812 = this;
+                    c096812.label = 1;
+                    Object objStop2 = BridgeService.this.udpRelay.stop(c096812);
+                    c09681 = c096812;
+                    if (objStop2 == coroutine_suspended) {
+                        return coroutine_suspended;
+                    }
+                    c09681.label = 2;
+                    objStop = BridgeService.this.proxy.stop(c09681);
+                    c09681 = c09681;
+                    if (objStop == coroutine_suspended) {
+                        return coroutine_suspended;
+                    }
+                    c09681.label = 3;
+                    return BridgeService.this.engine.stop(c09681) == coroutine_suspended ? coroutine_suspended : Unit.INSTANCE;
+                case 1:
+                    c09681 = this;
+                    ResultKt.throwOnFailure(obj);
+                    c09681.label = 2;
+                    objStop = BridgeService.this.proxy.stop(c09681);
+                    c09681 = c09681;
+                    if (objStop == coroutine_suspended) {
+                    }
+                    c09681.label = 3;
+                    if (BridgeService.this.engine.stop(c09681) == coroutine_suspended) {
+                    }
+                    break;
+                case 2:
+                    c09681 = this;
+                    ResultKt.throwOnFailure(obj);
+                    c09681.label = 3;
+                    if (BridgeService.this.engine.stop(c09681) == coroutine_suspended) {
+                    }
+                    break;
+                case 3:
+                    ResultKt.throwOnFailure(obj);
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+        }
+    }
+
+    /* compiled from: BridgeService.kt */
+    @Metadata(m145d1 = {"\u0000(\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0002\b\u0002\n\u0002\u0010\u000e\n\u0002\b\t\n\u0002\u0010\b\n\u0000\n\u0002\u0010\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\b\b\u0086\u0003\u0018\u00002\u00020\u0001B\u0007\b\u0002¢\u0006\u0002\u0010\u0002J?\u0010\u000f\u001a\u00020\u00102\u0006\u0010\u0011\u001a\u00020\u00122\u0006\u0010\u0013\u001a\u00020\u00042\b\u0010\u0014\u001a\u0004\u0018\u00010\u000e2\u0006\u0010\u0015\u001a\u00020\u000e2\u0006\u0010\u0016\u001a\u00020\u000e2\b\b\u0002\u0010\u0017\u001a\u00020\u000e¢\u0006\u0002\u0010\u0018J\u000e\u0010\u0019\u001a\u00020\u00102\u0006\u0010\u0011\u001a\u00020\u0012R\u000e\u0010\u0003\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\u0005\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\u0006\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\u0007\u001a\u00020\u0004X\u0082T¢\u0006\u0002\n\u0000R\u000e\u0010\b\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\t\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\n\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\u000b\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\f\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\r\u001a\u00020\u000eX\u0086T¢\u0006\u0002\n\u0000¨\u0006\u001a"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/service/BridgeService$Companion;", "", "()V", "ACTION_START", "", "ACTION_STOP", "ACTION_STOP_FROM_NOTIF", "CHANNEL_ID", "EXTRA_LOCAL_PORT", "EXTRA_PROXY_PORT", "EXTRA_REMOTE_HOST", "EXTRA_REMOTE_PORT", "EXTRA_UDP_RELAY_PORT", "NOTIF_ID", "", "start", "", "context", "Landroid/content/Context;", "host", "remotePort", "localPort", "proxyPort", "udpRelayPort", "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/Integer;III)V", "stop", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+    public static final class Companion {
+        public /* synthetic */ Companion(DefaultConstructorMarker defaultConstructorMarker) {
+            this();
+        }
+
+        private Companion() {
+        }
+
+        public static /* synthetic */ void start$default(Companion companion, Context context, String str, Integer num, int i, int i2, int i3, int i4, Object obj) {
+            if ((i4 & 32) != 0) {
+                i3 = BridgeConfig.DEFAULT_UDP_RELAY_PORT;
+            }
+            companion.start(context, str, num, i, i2, i3);
+        }
+
+        public final void start(Context context, String host, Integer remotePort, int localPort, int proxyPort, int udpRelayPort) {
+            Intrinsics.checkNotNullParameter(context, "context");
+            Intrinsics.checkNotNullParameter(host, "host");
+            Intent intent = new Intent(context, (Class<?>) BridgeService.class);
+            intent.setAction(BridgeService.ACTION_START);
+            intent.putExtra(BridgeService.EXTRA_REMOTE_HOST, host);
+            intent.putExtra(BridgeService.EXTRA_REMOTE_PORT, remotePort != null ? remotePort.intValue() : -1);
+            intent.putExtra(BridgeService.EXTRA_LOCAL_PORT, localPort);
+            intent.putExtra(BridgeService.EXTRA_PROXY_PORT, proxyPort);
+            intent.putExtra(BridgeService.EXTRA_UDP_RELAY_PORT, udpRelayPort);
+            if (Build.VERSION.SDK_INT >= 26) {
+                context.startForegroundService(intent);
+            } else {
+                context.startService(intent);
+            }
+        }
+
+        public final void stop(Context context) {
+            Intrinsics.checkNotNullParameter(context, "context");
+            Intent intent = new Intent(context, (Class<?>) BridgeService.class);
+            intent.setAction(BridgeService.ACTION_STOP);
+            context.startService(intent);
+        }
+    }
+}
+
+===== apk-analysis/decompiled/sources/com/ninjatech/minecraftlanbridge/relay/HttpProxyServer.java =====
+package com.ninjatech.minecraftlanbridge.relay;
+
+import androidx.core.app.NotificationCompat;
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat;
+import com.ninjatech.minecraftlanbridge.util.NetworkUtils;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.atomic.AtomicInteger;
+import kotlin.Metadata;
+import kotlin.Pair;
+import kotlin.Result;
+import kotlin.ResultKt;
+import kotlin.TuplesKt;
+import kotlin.Unit;
+import kotlin.collections.CollectionsKt;
+import kotlin.coroutines.Continuation;
+import kotlin.coroutines.intrinsics.IntrinsicsKt;
+import kotlin.coroutines.jvm.internal.ContinuationImpl;
+import kotlin.coroutines.jvm.internal.DebugMetadata;
+import kotlin.coroutines.jvm.internal.SuspendLambda;
+import kotlin.jvm.functions.Function2;
+import kotlin.jvm.internal.DefaultConstructorMarker;
+import kotlin.jvm.internal.Intrinsics;
+import kotlin.ranges.IntRange;
+import kotlin.ranges.RangesKt;
+import kotlin.text.Charsets;
+import kotlin.text.StringsKt;
+import kotlinx.coroutines.BuildersKt;
+import kotlinx.coroutines.BuildersKt__Builders_commonKt;
+import kotlinx.coroutines.CoroutineDispatcher;
+import kotlinx.coroutines.CoroutineScope;
+import kotlinx.coroutines.CoroutineScopeKt;
+import kotlinx.coroutines.Dispatchers;
+import kotlinx.coroutines.Job;
+import kotlinx.coroutines.JobKt;
+import kotlinx.coroutines.SupervisorKt;
+import kotlinx.coroutines.flow.FlowKt;
+import kotlinx.coroutines.flow.MutableStateFlow;
+import kotlinx.coroutines.flow.StateFlow;
+import kotlinx.coroutines.flow.StateFlowKt;
+import kotlinx.coroutines.selects.SelectImplementation;
+import org.xbill.DNS.Type;
+import org.xbill.DNS.WKSRecord;
+
+/* compiled from: HttpProxyServer.kt */
+@Metadata(m145d1 = {"\u0000\u0094\u0001\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0010#\n\u0002\u0018\u0002\n\u0000\n\u0002\u0010\"\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0010\u0002\n\u0002\b\u0002\n\u0002\u0010\u000e\n\u0000\n\u0002\u0010\b\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0005\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0006\n\u0002\u0010\u000b\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0010\u0012\n\u0002\b\u000f\u0018\u0000 E2\u00020\u0001:\u0004EFGHB\u0005¢\u0006\u0002\u0010\u0002J0\u0010\u001d\u001a\u00020\u001e2\u0006\u0010\u001f\u001a\u00020\u000e2\u0006\u0010 \u001a\u00020!2\u0006\u0010\"\u001a\u00020#2\b\u0010$\u001a\u0004\u0018\u00010%H\u0082@¢\u0006\u0002\u0010&J\u0012\u0010'\u001a\u00020\u001e2\b\u0010(\u001a\u0004\u0018\u00010\nH\u0002J\u001e\u0010)\u001a\u00020\u001e2\u0006\u0010*\u001a\u00020+2\u0006\u0010,\u001a\u00020-H\u0082@¢\u0006\u0002\u0010.J\u0010\u0010/\u001a\u00020!2\u0006\u0010(\u001a\u00020!H\u0002J0\u00100\u001a\u00020\u001e2\u0006\u00101\u001a\u00020\n2\u0006\u0010 \u001a\u00020!2\u0006\u0010\"\u001a\u00020#2\b\u0010$\u001a\u0004\u0018\u00010%H\u0082@¢\u0006\u0002\u00102J\u0006\u00103\u001a\u000204J$\u00105\u001a\u000e\u0012\u0004\u0012\u00020!\u0012\u0004\u0012\u00020#062\u0006\u00107\u001a\u00020!2\u0006\u00108\u001a\u00020#H\u0002J\u0010\u00109\u001a\u00020:2\u0006\u0010*\u001a\u00020+H\u0002J \u0010;\u001a\u00020\u001e2\u0006\u0010,\u001a\u00020-2\u0006\u0010$\u001a\u00020%2\u0006\u0010<\u001a\u000204H\u0002J\u0016\u0010=\u001a\u00020\u001e2\u0006\u0010>\u001a\u00020\u0016H\u0086@¢\u0006\u0002\u0010?J\u000e\u0010@\u001a\u00020\u001eH\u0086@¢\u0006\u0002\u0010AJ \u0010B\u001a\u00020\u001e2\u0006\u0010,\u001a\u00020-2\u0006\u0010C\u001a\u00020!2\u0006\u0010D\u001a\u00020!H\u0002R\u0014\u0010\u0003\u001a\b\u0012\u0004\u0012\u00020\u00050\u0004X\u0082\u0004¢\u0006\u0002\n\u0000R\u000e\u0010\u0006\u001a\u00020\u0007X\u0082\u0004¢\u0006\u0002\n\u0000R2\u0010\b\u001a&\u0012\f\u0012\n \u000b*\u0004\u0018\u00010\n0\n \u000b*\u0012\u0012\f\u0012\n \u000b*\u0004\u0018\u00010\n0\n\u0018\u00010\f0\tX\u0082\u0004¢\u0006\u0002\n\u0000R\u0010\u0010\r\u001a\u0004\u0018\u00010\u000eX\u0082\u000e¢\u0006\u0002\n\u0000R\u0010\u0010\u000f\u001a\u0004\u0018\u00010\u0010X\u0082\u000e¢\u0006\u0002\n\u0000R\u0011\u0010\u0011\u001a\u00020\u0012¢\u0006\b\n\u0000\u001a\u0004\b\u0013\u0010\u0014R\u0010\u0010\u0015\u001a\u0004\u0018\u00010\u0016X\u0082\u000e¢\u0006\u0002\n\u0000R\u0010\u0010\u0017\u001a\u0004\u0018\u00010\u0018X\u0082\u000e¢\u0006\u0002\n\u0000R\u0017\u0010\u0019\u001a\b\u0012\u0004\u0012\u00020\u00050\u001a¢\u0006\b\n\u0000\u001a\u0004\b\u001b\u0010\u001c¨\u0006I"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer;", "", "()V", "_status", "Lkotlinx/coroutines/flow/MutableStateFlow;", "Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$ProxyStatus;", "activeConnections", "Ljava/util/concurrent/atomic/AtomicInteger;", "activeSockets", "", "Ljava/net/Socket;", "kotlin.jvm.PlatformType", "", "connectionsScope", "Lkotlinx/coroutines/CoroutineScope;", "listenJob", "Lkotlinx/coroutines/Job;", "log", "Lcom/ninjatech/minecraftlanbridge/relay/LogBuffer;", "getLog", "()Lcom/ninjatech/minecraftlanbridge/relay/LogBuffer;", "runningConfig", "Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$ProxyConfig;", "serverSocket", "Ljava/net/ServerSocket;", NotificationCompat.CATEGORY_STATUS, "Lkotlinx/coroutines/flow/StateFlow;", "getStatus", "()Lkotlinx/coroutines/flow/StateFlow;", "acceptLoop", "", "scope", "lanIp", "", "port", "", "info", "Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$DiscoveryInfo;", "(Lkotlinx/coroutines/CoroutineScope;Ljava/lang/String;ILcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$DiscoveryInfo;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;", "closeQuietly", "s", "copy", "input", "Ljava/io/InputStream;", "output", "Ljava/io/OutputStream;", "(Ljava/io/InputStream;Ljava/io/OutputStream;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;", "escapeJson", "handleConnection", "client", "(Ljava/net/Socket;Ljava/lang/String;ILcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$DiscoveryInfo;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;", "isRunning", "", "parseHostPort", "Lkotlin/Pair;", "hostHeader", "defaultPort", "readHeaderBlock", "", "serveDiscovery", "headOnly", "start", "config", "(Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$ProxyConfig;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;", "stop", "(Lkotlin/coroutines/Continuation;)Ljava/lang/Object;", "writeSimpleResponse", "statusLine", "body", "Companion", "DiscoveryInfo", "ProxyConfig", "ProxyStatus", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+/* loaded from: classes3.dex */
+public final class HttpProxyServer {
+    private static final int BUFFER_SIZE = 16384;
+    public static final String DISCOVERY_PATH = "/__lanbridge_info";
+    private CoroutineScope connectionsScope;
+    private Job listenJob;
+    private volatile ProxyConfig runningConfig;
+    private ServerSocket serverSocket;
+
+    /* renamed from: Companion, reason: from kotlin metadata */
+    public static final Companion INSTANCE = new Companion(null);
+    private static final HttpProxyServer shared = new HttpProxyServer();
+    private final Set<Socket> activeSockets = Collections.synchronizedSet(new LinkedHashSet());
+    private final AtomicInteger activeConnections = new AtomicInteger(0);
+    private final MutableStateFlow<ProxyStatus> _status = StateFlowKt.MutableStateFlow(new ProxyStatus(false, null, 0, 0, null, 31, null));
+    private final StateFlow<ProxyStatus> status = FlowKt.asStateFlow(this._status);
+    private final LogBuffer log = new LogBuffer(0, 1, null);
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.relay.HttpProxyServer", m162f = "HttpProxyServer.kt", m163i = {0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3}, m164l = {WKSRecord.Service.SUR_MEAS, Type.AMTRELAY, 297, 314}, m165m = "handleConnection", m166n = {"this", "client", "rawInput", "output", "clientIp", "host", "originPort", "this", "client", "origin", "this", "client", "output", "clientIp", "method", "headers", "host", "path", "defaultPort", "this", "client", "origin"}, m167s = {"L$0", "L$1", "L$2", "L$3", "L$4", "L$5", "L$6", "L$0", "L$1", "L$2", "L$0", "L$1", "L$2", "L$3", "L$4", "L$5", "L$6", "L$7", "I$0", "L$0", "L$1", "L$2"})
+    /* renamed from: com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$handleConnection$1 */
+    static final class C09511 extends ContinuationImpl {
+        int I$0;
+        Object L$0;
+        Object L$1;
+        Object L$2;
+        Object L$3;
+        Object L$4;
+        Object L$5;
+        Object L$6;
+        Object L$7;
+        int label;
+        /* synthetic */ Object result;
+
+        C09511(Continuation<? super C09511> continuation) {
+            super(continuation);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Object invokeSuspend(Object obj) {
+            this.result = obj;
+            this.label |= Integer.MIN_VALUE;
+            return HttpProxyServer.this.handleConnection(null, null, 0, null, this);
+        }
+    }
+
+    public final StateFlow<ProxyStatus> getStatus() {
+        return this.status;
+    }
+
+    public final LogBuffer getLog() {
+        return this.log;
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000 \n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0002\b\u0002\n\u0002\u0010\b\n\u0000\n\u0002\u0010\u000e\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0003\b\u0086\u0003\u0018\u00002\u00020\u0001B\u0007\b\u0002¢\u0006\u0002\u0010\u0002R\u000e\u0010\u0003\u001a\u00020\u0004X\u0082T¢\u0006\u0002\n\u0000R\u000e\u0010\u0005\u001a\u00020\u0006X\u0086T¢\u0006\u0002\n\u0000R\u0011\u0010\u0007\u001a\u00020\b¢\u0006\b\n\u0000\u001a\u0004\b\t\u0010\n¨\u0006\u000b"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$Companion;", "", "()V", "BUFFER_SIZE", "", "DISCOVERY_PATH", "", "shared", "Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer;", "getShared", "()Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer;", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+    public static final class Companion {
+        public /* synthetic */ Companion(DefaultConstructorMarker defaultConstructorMarker) {
+            this();
+        }
+
+        private Companion() {
+        }
+
+        public final HttpProxyServer getShared() {
+            return HttpProxyServer.shared;
+        }
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000&\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0000\n\u0002\u0010\u000e\n\u0000\n\u0002\u0010\b\n\u0000\n\u0002\u0018\u0002\n\u0002\b\f\n\u0002\u0010\u000b\n\u0002\b\u0004\b\u0086\b\u0018\u00002\u00020\u0001B#\u0012\b\u0010\u0002\u001a\u0004\u0018\u00010\u0003\u0012\u0006\u0010\u0004\u001a\u00020\u0005\u0012\n\b\u0002\u0010\u0006\u001a\u0004\u0018\u00010\u0007¢\u0006\u0002\u0010\bJ\u000b\u0010\u000f\u001a\u0004\u0018\u00010\u0003HÆ\u0003J\t\u0010\u0010\u001a\u00020\u0005HÆ\u0003J\u000b\u0010\u0011\u001a\u0004\u0018\u00010\u0007HÆ\u0003J+\u0010\u0012\u001a\u00020\u00002\n\b\u0002\u0010\u0002\u001a\u0004\u0018\u00010\u00032\b\b\u0002\u0010\u0004\u001a\u00020\u00052\n\b\u0002\u0010\u0006\u001a\u0004\u0018\u00010\u0007HÆ\u0001J\u0013\u0010\u0013\u001a\u00020\u00142\b\u0010\u0015\u001a\u0004\u0018\u00010\u0001HÖ\u0003J\t\u0010\u0016\u001a\u00020\u0005HÖ\u0001J\t\u0010\u0017\u001a\u00020\u0003HÖ\u0001R\u0013\u0010\u0002\u001a\u0004\u0018\u00010\u0003¢\u0006\b\n\u0000\u001a\u0004\b\t\u0010\nR\u0013\u0010\u0006\u001a\u0004\u0018\u00010\u0007¢\u0006\b\n\u0000\u001a\u0004\b\u000b\u0010\fR\u0011\u0010\u0004\u001a\u00020\u0005¢\u0006\b\n\u0000\u001a\u0004\b\r\u0010\u000e¨\u0006\u0018"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$ProxyConfig;", "", "bindHost", "", "localPort", "", "discoveryInfo", "Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$DiscoveryInfo;", "(Ljava/lang/String;ILcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$DiscoveryInfo;)V", "getBindHost", "()Ljava/lang/String;", "getDiscoveryInfo", "()Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$DiscoveryInfo;", "getLocalPort", "()I", "component1", "component2", "component3", "copy", "equals", "", "other", "hashCode", "toString", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+    public static final /* data */ class ProxyConfig {
+        private final String bindHost;
+        private final DiscoveryInfo discoveryInfo;
+        private final int localPort;
+
+        public static /* synthetic */ ProxyConfig copy$default(ProxyConfig proxyConfig, String str, int i, DiscoveryInfo discoveryInfo, int i2, Object obj) {
+            if ((i2 & 1) != 0) {
+                str = proxyConfig.bindHost;
+            }
+            if ((i2 & 2) != 0) {
+                i = proxyConfig.localPort;
+            }
+            if ((i2 & 4) != 0) {
+                discoveryInfo = proxyConfig.discoveryInfo;
+            }
+            return proxyConfig.copy(str, i, discoveryInfo);
+        }
+
+        /* renamed from: component1, reason: from getter */
+        public final String getBindHost() {
+            return this.bindHost;
+        }
+
+        /* renamed from: component2, reason: from getter */
+        public final int getLocalPort() {
+            return this.localPort;
+        }
+
+        /* renamed from: component3, reason: from getter */
+        public final DiscoveryInfo getDiscoveryInfo() {
+            return this.discoveryInfo;
+        }
+
+        public final ProxyConfig copy(String bindHost, int localPort, DiscoveryInfo discoveryInfo) {
+            return new ProxyConfig(bindHost, localPort, discoveryInfo);
+        }
+
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof ProxyConfig)) {
+                return false;
+            }
+            ProxyConfig proxyConfig = (ProxyConfig) other;
+            return Intrinsics.areEqual(this.bindHost, proxyConfig.bindHost) && this.localPort == proxyConfig.localPort && Intrinsics.areEqual(this.discoveryInfo, proxyConfig.discoveryInfo);
+        }
+
+        public int hashCode() {
+            return ((((this.bindHost == null ? 0 : this.bindHost.hashCode()) * 31) + Integer.hashCode(this.localPort)) * 31) + (this.discoveryInfo != null ? this.discoveryInfo.hashCode() : 0);
+        }
+
+        public String toString() {
+            return "ProxyConfig(bindHost=" + this.bindHost + ", localPort=" + this.localPort + ", discoveryInfo=" + this.discoveryInfo + ")";
+        }
+
+        public ProxyConfig(String bindHost, int localPort, DiscoveryInfo discoveryInfo) {
+            this.bindHost = bindHost;
+            this.localPort = localPort;
+            this.discoveryInfo = discoveryInfo;
+        }
+
+        public /* synthetic */ ProxyConfig(String str, int i, DiscoveryInfo discoveryInfo, int i2, DefaultConstructorMarker defaultConstructorMarker) {
+            this(str, i, (i2 & 4) != 0 ? null : discoveryInfo);
+        }
+
+        public final String getBindHost() {
+            return this.bindHost;
+        }
+
+        public final int getLocalPort() {
+            return this.localPort;
+        }
+
+        public final DiscoveryInfo getDiscoveryInfo() {
+            return this.discoveryInfo;
+        }
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000 \n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0000\n\u0002\u0010\u000e\n\u0000\n\u0002\u0010\b\n\u0002\b\u000f\n\u0002\u0010\u000b\n\u0002\b\u0004\b\u0086\b\u0018\u00002\u00020\u0001B'\u0012\u0006\u0010\u0002\u001a\u00020\u0003\u0012\u0006\u0010\u0004\u001a\u00020\u0005\u0012\u0006\u0010\u0006\u001a\u00020\u0005\u0012\b\b\u0002\u0010\u0007\u001a\u00020\u0005¢\u0006\u0002\u0010\bJ\t\u0010\u000f\u001a\u00020\u0003HÆ\u0003J\t\u0010\u0010\u001a\u00020\u0005HÆ\u0003J\t\u0010\u0011\u001a\u00020\u0005HÆ\u0003J\t\u0010\u0012\u001a\u00020\u0005HÆ\u0003J1\u0010\u0013\u001a\u00020\u00002\b\b\u0002\u0010\u0002\u001a\u00020\u00032\b\b\u0002\u0010\u0004\u001a\u00020\u00052\b\b\u0002\u0010\u0006\u001a\u00020\u00052\b\b\u0002\u0010\u0007\u001a\u00020\u0005HÆ\u0001J\u0013\u0010\u0014\u001a\u00020\u00152\b\u0010\u0016\u001a\u0004\u0018\u00010\u0001HÖ\u0003J\t\u0010\u0017\u001a\u00020\u0005HÖ\u0001J\t\u0010\u0018\u001a\u00020\u0003HÖ\u0001R\u0011\u0010\u0006\u001a\u00020\u0005¢\u0006\b\n\u0000\u001a\u0004\b\t\u0010\nR\u0011\u0010\u0002\u001a\u00020\u0003¢\u0006\b\n\u0000\u001a\u0004\b\u000b\u0010\fR\u0011\u0010\u0004\u001a\u00020\u0005¢\u0006\b\n\u0000\u001a\u0004\b\r\u0010\nR\u0011\u0010\u0007\u001a\u00020\u0005¢\u0006\b\n\u0000\u001a\u0004\b\u000e\u0010\n¨\u0006\u0019"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$DiscoveryInfo;", "", "lanHost", "", "proxyPort", "", "gameRelayPort", "udpRelayPort", "(Ljava/lang/String;III)V", "getGameRelayPort", "()I", "getLanHost", "()Ljava/lang/String;", "getProxyPort", "getUdpRelayPort", "component1", "component2", "component3", "component4", "copy", "equals", "", "other", "hashCode", "toString", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+    public static final /* data */ class DiscoveryInfo {
+        private final int gameRelayPort;
+        private final String lanHost;
+        private final int proxyPort;
+        private final int udpRelayPort;
+
+        public static /* synthetic */ DiscoveryInfo copy$default(DiscoveryInfo discoveryInfo, String str, int i, int i2, int i3, int i4, Object obj) {
+            if ((i4 & 1) != 0) {
+                str = discoveryInfo.lanHost;
+            }
+            if ((i4 & 2) != 0) {
+                i = discoveryInfo.proxyPort;
+            }
+            if ((i4 & 4) != 0) {
+                i2 = discoveryInfo.gameRelayPort;
+            }
+            if ((i4 & 8) != 0) {
+                i3 = discoveryInfo.udpRelayPort;
+            }
+            return discoveryInfo.copy(str, i, i2, i3);
+        }
+
+        /* renamed from: component1, reason: from getter */
+        public final String getLanHost() {
+            return this.lanHost;
+        }
+
+        /* renamed from: component2, reason: from getter */
+        public final int getProxyPort() {
+            return this.proxyPort;
+        }
+
+        /* renamed from: component3, reason: from getter */
+        public final int getGameRelayPort() {
+            return this.gameRelayPort;
+        }
+
+        /* renamed from: component4, reason: from getter */
+        public final int getUdpRelayPort() {
+            return this.udpRelayPort;
+        }
+
+        public final DiscoveryInfo copy(String lanHost, int proxyPort, int gameRelayPort, int udpRelayPort) {
+            Intrinsics.checkNotNullParameter(lanHost, "lanHost");
+            return new DiscoveryInfo(lanHost, proxyPort, gameRelayPort, udpRelayPort);
+        }
+
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof DiscoveryInfo)) {
+                return false;
+            }
+            DiscoveryInfo discoveryInfo = (DiscoveryInfo) other;
+            return Intrinsics.areEqual(this.lanHost, discoveryInfo.lanHost) && this.proxyPort == discoveryInfo.proxyPort && this.gameRelayPort == discoveryInfo.gameRelayPort && this.udpRelayPort == discoveryInfo.udpRelayPort;
+        }
+
+        public int hashCode() {
+            return (((((this.lanHost.hashCode() * 31) + Integer.hashCode(this.proxyPort)) * 31) + Integer.hashCode(this.gameRelayPort)) * 31) + Integer.hashCode(this.udpRelayPort);
+        }
+
+        public String toString() {
+            return "DiscoveryInfo(lanHost=" + this.lanHost + ", proxyPort=" + this.proxyPort + ", gameRelayPort=" + this.gameRelayPort + ", udpRelayPort=" + this.udpRelayPort + ")";
+        }
+
+        public DiscoveryInfo(String lanHost, int proxyPort, int gameRelayPort, int udpRelayPort) {
+            Intrinsics.checkNotNullParameter(lanHost, "lanHost");
+            this.lanHost = lanHost;
+            this.proxyPort = proxyPort;
+            this.gameRelayPort = gameRelayPort;
+            this.udpRelayPort = udpRelayPort;
+        }
+
+        public /* synthetic */ DiscoveryInfo(String str, int i, int i2, int i3, int i4, DefaultConstructorMarker defaultConstructorMarker) {
+            this(str, i, i2, (i4 & 8) != 0 ? 0 : i3);
+        }
+
+        public final String getLanHost() {
+            return this.lanHost;
+        }
+
+        public final int getProxyPort() {
+            return this.proxyPort;
+        }
+
+        public final int getGameRelayPort() {
+            return this.gameRelayPort;
+        }
+
+        public final int getUdpRelayPort() {
+            return this.udpRelayPort;
+        }
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000\u001e\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0000\n\u0002\u0010\u000b\n\u0000\n\u0002\u0010\u000e\n\u0000\n\u0002\u0010\b\n\u0002\b\u0018\b\u0086\b\u0018\u00002\u00020\u0001B9\u0012\b\b\u0002\u0010\u0002\u001a\u00020\u0003\u0012\b\b\u0002\u0010\u0004\u001a\u00020\u0005\u0012\b\b\u0002\u0010\u0006\u001a\u00020\u0007\u0012\b\b\u0002\u0010\b\u001a\u00020\u0007\u0012\n\b\u0002\u0010\t\u001a\u0004\u0018\u00010\u0005¢\u0006\u0002\u0010\nJ\t\u0010\u0015\u001a\u00020\u0003HÆ\u0003J\t\u0010\u0016\u001a\u00020\u0005HÆ\u0003J\t\u0010\u0017\u001a\u00020\u0007HÆ\u0003J\t\u0010\u0018\u001a\u00020\u0007HÆ\u0003J\u000b\u0010\u0019\u001a\u0004\u0018\u00010\u0005HÆ\u0003J=\u0010\u001a\u001a\u00020\u00002\b\b\u0002\u0010\u0002\u001a\u00020\u00032\b\b\u0002\u0010\u0004\u001a\u00020\u00052\b\b\u0002\u0010\u0006\u001a\u00020\u00072\b\b\u0002\u0010\b\u001a\u00020\u00072\n\b\u0002\u0010\t\u001a\u0004\u0018\u00010\u0005HÆ\u0001J\u0013\u0010\u001b\u001a\u00020\u00032\b\u0010\u001c\u001a\u0004\u0018\u00010\u0001HÖ\u0003J\t\u0010\u001d\u001a\u00020\u0007HÖ\u0001J\t\u0010\u001e\u001a\u00020\u0005HÖ\u0001R\u0011\u0010\b\u001a\u00020\u0007¢\u0006\b\n\u0000\u001a\u0004\b\u000b\u0010\fR\u0011\u0010\r\u001a\u00020\u00058F¢\u0006\u0006\u001a\u0004\b\u000e\u0010\u000fR\u0013\u0010\t\u001a\u0004\u0018\u00010\u0005¢\u0006\b\n\u0000\u001a\u0004\b\u0010\u0010\u000fR\u0011\u0010\u0004\u001a\u00020\u0005¢\u0006\b\n\u0000\u001a\u0004\b\u0011\u0010\u000fR\u0011\u0010\u0006\u001a\u00020\u0007¢\u0006\b\n\u0000\u001a\u0004\b\u0012\u0010\fR\u0011\u0010\u0002\u001a\u00020\u0003¢\u0006\b\n\u0000\u001a\u0004\b\u0013\u0010\u0014¨\u0006\u001f"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer$ProxyStatus;", "", "running", "", "localHost", "", "localPort", "", "activeConnections", "lastError", "(ZLjava/lang/String;IILjava/lang/String;)V", "getActiveConnections", "()I", "display", "getDisplay", "()Ljava/lang/String;", "getLastError", "getLocalHost", "getLocalPort", "getRunning", "()Z", "component1", "component2", "component3", "component4", "component5", "copy", "equals", "other", "hashCode", "toString", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+    public static final /* data */ class ProxyStatus {
+        private final int activeConnections;
+        private final String lastError;
+        private final String localHost;
+        private final int localPort;
+        private final boolean running;
+
+        public ProxyStatus() {
+            this(false, null, 0, 0, null, 31, null);
+        }
+
+        public static /* synthetic */ ProxyStatus copy$default(ProxyStatus proxyStatus, boolean z, String str, int i, int i2, String str2, int i3, Object obj) {
+            if ((i3 & 1) != 0) {
+                z = proxyStatus.running;
+            }
+            if ((i3 & 2) != 0) {
+                str = proxyStatus.localHost;
+            }
+            String str3 = str;
+            if ((i3 & 4) != 0) {
+                i = proxyStatus.localPort;
+            }
+            int i4 = i;
+            if ((i3 & 8) != 0) {
+                i2 = proxyStatus.activeConnections;
+            }
+            int i5 = i2;
+            if ((i3 & 16) != 0) {
+                str2 = proxyStatus.lastError;
+            }
+            return proxyStatus.copy(z, str3, i4, i5, str2);
+        }
+
+        /* renamed from: component1, reason: from getter */
+        public final boolean getRunning() {
+            return this.running;
+        }
+
+        /* renamed from: component2, reason: from getter */
+        public final String getLocalHost() {
+            return this.localHost;
+        }
+
+        /* renamed from: component3, reason: from getter */
+        public final int getLocalPort() {
+            return this.localPort;
+        }
+
+        /* renamed from: component4, reason: from getter */
+        public final int getActiveConnections() {
+            return this.activeConnections;
+        }
+
+        /* renamed from: component5, reason: from getter */
+        public final String getLastError() {
+            return this.lastError;
+        }
+
+        public final ProxyStatus copy(boolean running, String localHost, int localPort, int activeConnections, String lastError) {
+            Intrinsics.checkNotNullParameter(localHost, "localHost");
+            return new ProxyStatus(running, localHost, localPort, activeConnections, lastError);
+        }
+
+        public boolean equals(Object other) {
+            if (this == other) {
+                return true;
+            }
+            if (!(other instanceof ProxyStatus)) {
+                return false;
+            }
+            ProxyStatus proxyStatus = (ProxyStatus) other;
+            return this.running == proxyStatus.running && Intrinsics.areEqual(this.localHost, proxyStatus.localHost) && this.localPort == proxyStatus.localPort && this.activeConnections == proxyStatus.activeConnections && Intrinsics.areEqual(this.lastError, proxyStatus.lastError);
+        }
+
+        public int hashCode() {
+            return (((((((Boolean.hashCode(this.running) * 31) + this.localHost.hashCode()) * 31) + Integer.hashCode(this.localPort)) * 31) + Integer.hashCode(this.activeConnections)) * 31) + (this.lastError == null ? 0 : this.lastError.hashCode());
+        }
+
+        public String toString() {
+            return "ProxyStatus(running=" + this.running + ", localHost=" + this.localHost + ", localPort=" + this.localPort + ", activeConnections=" + this.activeConnections + ", lastError=" + this.lastError + ")";
+        }
+
+        public ProxyStatus(boolean running, String localHost, int localPort, int activeConnections, String lastError) {
+            Intrinsics.checkNotNullParameter(localHost, "localHost");
+            this.running = running;
+            this.localHost = localHost;
+            this.localPort = localPort;
+            this.activeConnections = activeConnections;
+            this.lastError = lastError;
+        }
+
+        public /* synthetic */ ProxyStatus(boolean z, String str, int i, int i2, String str2, int i3, DefaultConstructorMarker defaultConstructorMarker) {
+            this((i3 & 1) != 0 ? false : z, (i3 & 2) != 0 ? "" : str, (i3 & 4) != 0 ? 0 : i, (i3 & 8) == 0 ? i2 : 0, (i3 & 16) != 0 ? null : str2);
+        }
+
+        public final boolean getRunning() {
+            return this.running;
+        }
+
+        public final String getLocalHost() {
+            return this.localHost;
+        }
+
+        public final int getLocalPort() {
+            return this.localPort;
+        }
+
+        public final int getActiveConnections() {
+            return this.activeConnections;
+        }
+
+        public final String getLastError() {
+            return this.lastError;
+        }
+
+        public final String getDisplay() {
+            if (!this.running) {
+                return "—";
+            }
+            return this.localHost + ":" + this.localPort;
+        }
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$start$2", m162f = "HttpProxyServer.kt", m163i = {}, m164l = {}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+    /* renamed from: com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$start$2 */
+    static final class C09532 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        final /* synthetic */ ProxyConfig $config;
+        int label;
+
+        /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+        C09532(ProxyConfig proxyConfig, Continuation<? super C09532> continuation) {
+            super(2, continuation);
+            this.$config = proxyConfig;
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            return HttpProxyServer.this.new C09532(this.$config, continuation);
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09532) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Object invokeSuspend(Object obj) throws IOException, RelayStartException {
+            IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            switch (this.label) {
+                case 0:
+                    ResultKt.throwOnFailure(obj);
+                    if (HttpProxyServer.this.isRunning()) {
+                        HttpProxyServer.this.getLog().log("Proxy already running");
+                        return Unit.INSTANCE;
+                    }
+                    if (!NetworkUtils.INSTANCE.isValidPort(this.$config.getLocalPort())) {
+                        HttpProxyServer.this._status.setValue(ProxyStatus.copy$default((ProxyStatus) HttpProxyServer.this._status.getValue(), false, null, 0, 0, "Invalid proxy port", 14, null));
+                        HttpProxyServer.this.getLog().log("Invalid proxy port: " + this.$config.getLocalPort());
+                        throw new RelayStartException("Proxy port must be 1-65535");
+                    }
+                    String lanIp = this.$config.getBindHost();
+                    if (lanIp == null) {
+                        lanIp = NetworkUtils.INSTANCE.getBestLanIpv4();
+                    }
+                    if (lanIp == null) {
+                        HttpProxyServer.this._status.setValue(ProxyStatus.copy$default((ProxyStatus) HttpProxyServer.this._status.getValue(), false, null, 0, 0, "No LAN/Wi-Fi detected", 14, null));
+                        HttpProxyServer.this.getLog().log("Proxy: no LAN/Wi-Fi IPv4 detected");
+                        throw new RelayStartException("No LAN/Wi-Fi network detected for proxy");
+                    }
+                    try {
+                        ServerSocket $this$invokeSuspend_u24lambda_u240 = new ServerSocket();
+                        ProxyConfig proxyConfig = this.$config;
+                        $this$invokeSuspend_u24lambda_u240.setReuseAddress(true);
+                        $this$invokeSuspend_u24lambda_u240.bind(new InetSocketAddress(lanIp, proxyConfig.getLocalPort()));
+                        HttpProxyServer.this.serverSocket = $this$invokeSuspend_u24lambda_u240;
+                        HttpProxyServer.this.runningConfig = this.$config;
+                        HttpProxyServer.this._status.setValue(new ProxyStatus(true, lanIp, this.$config.getLocalPort(), 0, null, 16, null));
+                        HttpProxyServer.this.getLog().log("Proxy started on " + lanIp + ":" + this.$config.getLocalPort());
+                        CoroutineScope connScope = CoroutineScopeKt.CoroutineScope(SupervisorKt.SupervisorJob$default((Job) null, 1, (Object) null).plus(Dispatchers.getIO()));
+                        HttpProxyServer.this.connectionsScope = connScope;
+                        HttpProxyServer.this.listenJob = BuildersKt__Builders_commonKt.launch$default(CoroutineScopeKt.CoroutineScope(Dispatchers.getIO()), null, null, new AnonymousClass1(HttpProxyServer.this, connScope, lanIp, this.$config, null), 3, null);
+                        return Unit.INSTANCE;
+                    } catch (IOException e) {
+                        HttpProxyServer.this._status.setValue(ProxyStatus.copy$default((ProxyStatus) HttpProxyServer.this._status.getValue(), false, null, 0, 0, "Proxy port unavailable: " + this.$config.getLocalPort(), 14, null));
+                        HttpProxyServer.this.getLog().log("Proxy port unavailable: " + this.$config.getLocalPort() + " (" + e.getMessage() + ")");
+                        throw new RelayStartException("Proxy port " + this.$config.getLocalPort() + " is unavailable or in use");
+                    }
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+        }
+
+        /* compiled from: HttpProxyServer.kt */
+        @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+        @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$start$2$1", m162f = "HttpProxyServer.kt", m163i = {}, m164l = {164}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+        /* renamed from: com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$start$2$1, reason: invalid class name */
+        static final class AnonymousClass1 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+            final /* synthetic */ ProxyConfig $config;
+            final /* synthetic */ CoroutineScope $connScope;
+            final /* synthetic */ String $lanIp;
+            int label;
+            final /* synthetic */ HttpProxyServer this$0;
+
+            /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+            AnonymousClass1(HttpProxyServer httpProxyServer, CoroutineScope coroutineScope, String str, ProxyConfig proxyConfig, Continuation<? super AnonymousClass1> continuation) {
+                super(2, continuation);
+                this.this$0 = httpProxyServer;
+                this.$connScope = coroutineScope;
+                this.$lanIp = str;
+                this.$config = proxyConfig;
+            }
+
+            @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+            public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+                return new AnonymousClass1(this.this$0, this.$connScope, this.$lanIp, this.$config, continuation);
+            }
+
+            @Override // kotlin.jvm.functions.Function2
+            public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+                return ((AnonymousClass1) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+            }
+
+            @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+            public final Object invokeSuspend(Object $result) {
+                Object coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+                switch (this.label) {
+                    case 0:
+                        ResultKt.throwOnFailure($result);
+                        this.label = 1;
+                        if (this.this$0.acceptLoop(this.$connScope, this.$lanIp, this.$config.getLocalPort(), this.$config.getDiscoveryInfo(), this) != coroutine_suspended) {
+                            break;
+                        } else {
+                            return coroutine_suspended;
+                        }
+                    case 1:
+                        ResultKt.throwOnFailure($result);
+                        break;
+                    default:
+                        throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+                }
+                return Unit.INSTANCE;
+            }
+        }
+    }
+
+    public final Object start(ProxyConfig config, Continuation<? super Unit> continuation) throws Throwable {
+        Object objWithContext = BuildersKt.withContext(Dispatchers.getIO(), new C09532(config, null), continuation);
+        return objWithContext == IntrinsicsKt.getCOROUTINE_SUSPENDED() ? objWithContext : Unit.INSTANCE;
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public final Object acceptLoop(CoroutineScope scope, String lanIp, int port, DiscoveryInfo info, Continuation<? super Unit> continuation) throws IOException {
+        ServerSocket ss = this.serverSocket;
+        if (ss == null) {
+            return Unit.INSTANCE;
+        }
+        while (JobKt.isActive(continuation.getContext()) && !ss.isClosed()) {
+            try {
+                try {
+                    Socket client = ss.accept();
+                    BuildersKt__Builders_commonKt.launch$default(scope, null, null, new C09492(client, lanIp, port, info, null), 3, null);
+                } catch (IOException e) {
+                    if (!ss.isClosed()) {
+                        this.log.log("Proxy accept error: " + e.getMessage());
+                    }
+                }
+            } catch (Exception e2) {
+                ServerSocket serverSocket = this.serverSocket;
+                boolean z = false;
+                if (serverSocket != null && !serverSocket.isClosed()) {
+                    z = true;
+                }
+                if (z) {
+                    this.log.log("Proxy listener stopped: " + e2.getMessage());
+                }
+            }
+        }
+        return Unit.INSTANCE;
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$acceptLoop$2", m162f = "HttpProxyServer.kt", m163i = {}, m164l = {176}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+    /* renamed from: com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$acceptLoop$2 */
+    static final class C09492 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        final /* synthetic */ Socket $client;
+        final /* synthetic */ DiscoveryInfo $info;
+        final /* synthetic */ String $lanIp;
+        final /* synthetic */ int $port;
+        int label;
+
+        /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+        C09492(Socket socket, String str, int i, DiscoveryInfo discoveryInfo, Continuation<? super C09492> continuation) {
+            super(2, continuation);
+            this.$client = socket;
+            this.$lanIp = str;
+            this.$port = i;
+            this.$info = discoveryInfo;
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            return HttpProxyServer.this.new C09492(this.$client, this.$lanIp, this.$port, this.$info, continuation);
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09492) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Object invokeSuspend(Object $result) {
+            Object coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            switch (this.label) {
+                case 0:
+                    ResultKt.throwOnFailure($result);
+                    HttpProxyServer httpProxyServer = HttpProxyServer.this;
+                    Socket client = this.$client;
+                    Intrinsics.checkNotNullExpressionValue(client, "$client");
+                    this.label = 1;
+                    if (httpProxyServer.handleConnection(client, this.$lanIp, this.$port, this.$info, this) != coroutine_suspended) {
+                        break;
+                    } else {
+                        return coroutine_suspended;
+                    }
+                case 1:
+                    ResultKt.throwOnFailure($result);
+                    break;
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+            return Unit.INSTANCE;
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    /* JADX WARN: Multi-variable type inference failed */
+    /* JADX WARN: Not initialized variable reg: 13, insn: 0x01d0: MOVE (r5 I:??[OBJECT, ARRAY]) = (r13 I:??[OBJECT, ARRAY] A[D('client' java.net.Socket)]), block:B:55:0x01cf */
+    /* JADX WARN: Not initialized variable reg: 13, insn: 0x01d5: MOVE (r5 I:??[OBJECT, ARRAY]) = (r13 I:??[OBJECT, ARRAY] A[D('client' java.net.Socket)]), block:B:57:0x01d4 */
+    /* JADX WARN: Not initialized variable reg: 13, insn: 0x01da: MOVE (r5 I:??[OBJECT, ARRAY]) = (r13 I:??[OBJECT, ARRAY] A[D('client' java.net.Socket)]), block:B:59:0x01d9 */
+    /* JADX WARN: Removed duplicated region for block: B:122:0x040b A[RETURN] */
+    /* JADX WARN: Removed duplicated region for block: B:123:0x040c  */
+    /* JADX WARN: Removed duplicated region for block: B:221:0x07f1 A[RETURN] */
+    /* JADX WARN: Removed duplicated region for block: B:222:0x07f2  */
+    /* JADX WARN: Removed duplicated region for block: B:314:0x06dd A[EXC_TOP_SPLITTER, SYNTHETIC] */
+    /* JADX WARN: Removed duplicated region for block: B:7:0x001b  */
+    /* JADX WARN: Type inference failed for: r2v0, types: [java.lang.String] */
+    /* JADX WARN: Type inference failed for: r2v1 */
+    /* JADX WARN: Type inference failed for: r2v101 */
+    /* JADX WARN: Type inference failed for: r2v111 */
+    /* JADX WARN: Type inference failed for: r2v118 */
+    /* JADX WARN: Type inference failed for: r2v120 */
+    /* JADX WARN: Type inference failed for: r2v123 */
+    /* JADX WARN: Type inference failed for: r2v129 */
+    /* JADX WARN: Type inference failed for: r2v142 */
+    /* JADX WARN: Type inference failed for: r2v143 */
+    /* JADX WARN: Type inference failed for: r2v144 */
+    /* JADX WARN: Type inference failed for: r2v147 */
+    /* JADX WARN: Type inference failed for: r2v148 */
+    /* JADX WARN: Type inference failed for: r2v18, types: [java.lang.Object, java.net.Socket] */
+    /* JADX WARN: Type inference failed for: r2v21 */
+    /* JADX WARN: Type inference failed for: r2v26 */
+    /* JADX WARN: Type inference failed for: r2v28 */
+    /* JADX WARN: Type inference failed for: r2v3 */
+    /* JADX WARN: Type inference failed for: r2v37 */
+    /* JADX WARN: Type inference failed for: r2v5 */
+    /* JADX WARN: Type inference failed for: r2v51 */
+    /* JADX WARN: Type inference failed for: r2v52 */
+    /* JADX WARN: Type inference failed for: r2v68 */
+    /* JADX WARN: Type inference failed for: r2v78 */
+    /* JADX WARN: Type inference failed for: r2v79 */
+    /* JADX WARN: Type inference failed for: r2v8 */
+    /* JADX WARN: Type inference failed for: r2v81 */
+    /* JADX WARN: Type inference failed for: r2v83 */
+    /* JADX WARN: Type inference failed for: r2v84, types: [java.lang.Object] */
+    /* JADX WARN: Type inference failed for: r2v89 */
+    /* JADX WARN: Type inference failed for: r2v90 */
+    /* JADX WARN: Type inference failed for: r2v93 */
+    /* JADX WARN: Type inference failed for: r2v96, types: [java.lang.Object] */
+    /* JADX WARN: Type inference failed for: r3v16 */
+    /* JADX WARN: Type inference failed for: r3v17 */
+    /* JADX WARN: Type inference failed for: r3v18 */
+    /* JADX WARN: Type inference failed for: r3v24 */
+    /* JADX WARN: Type inference failed for: r3v25 */
+    /* JADX WARN: Type inference failed for: r3v29 */
+    /* JADX WARN: Type inference failed for: r3v3 */
+    /* JADX WARN: Type inference failed for: r3v30 */
+    /* JADX WARN: Type inference failed for: r3v4 */
+    /* JADX WARN: Type inference failed for: r3v46 */
+    /* JADX WARN: Type inference failed for: r3v47 */
+    /* JADX WARN: Type inference failed for: r3v5, types: [java.lang.Object, java.net.Socket] */
+    /* JADX WARN: Type inference failed for: r3v51 */
+    /* JADX WARN: Type inference failed for: r3v52 */
+    /* JADX WARN: Type inference failed for: r3v55 */
+    /* JADX WARN: Type inference failed for: r3v56 */
+    /* JADX WARN: Type inference failed for: r3v57 */
+    /* JADX WARN: Type inference failed for: r3v58 */
+    /* JADX WARN: Type inference failed for: r3v60 */
+    /* JADX WARN: Type inference failed for: r3v61 */
+    /* JADX WARN: Type inference failed for: r3v63 */
+    /* JADX WARN: Type inference failed for: r3v64 */
+    /* JADX WARN: Type inference failed for: r3v67 */
+    /* JADX WARN: Type inference failed for: r3v68 */
+    /* JADX WARN: Type inference failed for: r3v71 */
+    /* JADX WARN: Type inference failed for: r3v72 */
+    /* JADX WARN: Type inference failed for: r3v73 */
+    /* JADX WARN: Type inference failed for: r3v74 */
+    /* JADX WARN: Type inference failed for: r3v75 */
+    /* JADX WARN: Type inference failed for: r3v76 */
+    /* JADX WARN: Type inference failed for: r3v80 */
+    /* JADX WARN: Type inference failed for: r3v81 */
+    /* JADX WARN: Type inference failed for: r3v82 */
+    /* JADX WARN: Type inference failed for: r3v83 */
+    /* JADX WARN: Type inference failed for: r3v84 */
+    /* JADX WARN: Type inference failed for: r3v85 */
+    /* JADX WARN: Type inference failed for: r3v9, types: [java.lang.Object, java.net.Socket] */
+    /* JADX WARN: Type inference failed for: r5v0, types: [java.lang.Object] */
+    /* JADX WARN: Type inference failed for: r5v1 */
+    /* JADX WARN: Type inference failed for: r5v103 */
+    /* JADX WARN: Type inference failed for: r5v104 */
+    /* JADX WARN: Type inference failed for: r5v111 */
+    /* JADX WARN: Type inference failed for: r5v112 */
+    /* JADX WARN: Type inference failed for: r5v113 */
+    /* JADX WARN: Type inference failed for: r5v116 */
+    /* JADX WARN: Type inference failed for: r5v117 */
+    /* JADX WARN: Type inference failed for: r5v120 */
+    /* JADX WARN: Type inference failed for: r5v13, types: [java.lang.Object] */
+    /* JADX WARN: Type inference failed for: r5v16 */
+    /* JADX WARN: Type inference failed for: r5v2 */
+    /* JADX WARN: Type inference failed for: r5v21 */
+    /* JADX WARN: Type inference failed for: r5v25 */
+    /* JADX WARN: Type inference failed for: r5v26 */
+    /* JADX WARN: Type inference failed for: r5v3 */
+    /* JADX WARN: Type inference failed for: r5v42 */
+    /* JADX WARN: Type inference failed for: r5v43 */
+    /* JADX WARN: Type inference failed for: r5v6 */
+    /* JADX WARN: Type inference failed for: r5v68 */
+    /* JADX WARN: Type inference failed for: r5v69 */
+    /* JADX WARN: Type inference failed for: r5v72 */
+    /* JADX WARN: Type inference failed for: r5v75 */
+    /* JADX WARN: Type inference failed for: r5v76 */
+    /* JADX WARN: Type inference failed for: r5v77 */
+    /* JADX WARN: Type inference failed for: r5v78 */
+    /* JADX WARN: Type inference failed for: r5v79 */
+    /* JADX WARN: Type inference failed for: r5v82 */
+    /* JADX WARN: Type inference failed for: r5v98 */
+    /* JADX WARN: Type inference failed for: r5v99 */
+    /* JADX WARN: Type inference failed for: r6v0, types: [int] */
+    /* JADX WARN: Type inference failed for: r6v1 */
+    /* JADX WARN: Type inference failed for: r6v12 */
+    /* JADX WARN: Type inference failed for: r6v13 */
+    /* JADX WARN: Type inference failed for: r6v14 */
+    /* JADX WARN: Type inference failed for: r6v15 */
+    /* JADX WARN: Type inference failed for: r6v18, types: [com.ninjatech.minecraftlanbridge.relay.HttpProxyServer, java.lang.Object] */
+    /* JADX WARN: Type inference failed for: r6v2 */
+    /* JADX WARN: Type inference failed for: r6v20 */
+    /* JADX WARN: Type inference failed for: r6v21 */
+    /* JADX WARN: Type inference failed for: r6v22 */
+    /* JADX WARN: Type inference failed for: r6v23 */
+    /* JADX WARN: Type inference failed for: r6v24 */
+    /* JADX WARN: Type inference failed for: r6v27 */
+    /* JADX WARN: Type inference failed for: r6v28 */
+    /* JADX WARN: Type inference failed for: r6v3 */
+    /* JADX WARN: Type inference failed for: r6v31 */
+    /* JADX WARN: Type inference failed for: r6v32 */
+    /* JADX WARN: Type inference failed for: r6v33 */
+    /* JADX WARN: Type inference failed for: r6v34 */
+    /* JADX WARN: Type inference failed for: r6v35 */
+    /* JADX WARN: Type inference failed for: r6v36 */
+    /* JADX WARN: Type inference failed for: r6v37 */
+    /* JADX WARN: Type inference failed for: r6v38 */
+    /* JADX WARN: Type inference failed for: r6v39 */
+    /* JADX WARN: Type inference failed for: r6v4, types: [com.ninjatech.minecraftlanbridge.relay.HttpProxyServer] */
+    /* JADX WARN: Type inference failed for: r6v40 */
+    /* JADX WARN: Type inference failed for: r6v41 */
+    /* JADX WARN: Type inference failed for: r6v42 */
+    /* JADX WARN: Type inference failed for: r6v43 */
+    /* JADX WARN: Type inference failed for: r6v44 */
+    /* JADX WARN: Type inference failed for: r6v45 */
+    /* JADX WARN: Type inference failed for: r6v46 */
+    /* JADX WARN: Type inference failed for: r6v47 */
+    /* JADX WARN: Type inference failed for: r6v48 */
+    /* JADX WARN: Type inference failed for: r6v49 */
+    /* JADX WARN: Type inference failed for: r6v5, types: [com.ninjatech.minecraftlanbridge.relay.HttpProxyServer] */
+    /* JADX WARN: Type inference failed for: r6v50 */
+    /* JADX WARN: Type inference failed for: r6v51 */
+    /* JADX WARN: Type inference failed for: r6v52 */
+    /* JADX WARN: Type inference failed for: r6v53 */
+    /* JADX WARN: Type inference failed for: r6v54 */
+    /* JADX WARN: Type inference failed for: r6v55 */
+    /* JADX WARN: Type inference failed for: r6v56 */
+    /* JADX WARN: Type inference failed for: r6v57 */
+    /* JADX WARN: Type inference failed for: r6v58 */
+    /* JADX WARN: Type inference failed for: r6v59 */
+    /* JADX WARN: Type inference failed for: r6v60 */
+    /* JADX WARN: Type inference failed for: r6v61 */
+    /* JADX WARN: Type inference failed for: r6v62 */
+    /* JADX WARN: Type inference failed for: r6v63 */
+    /* JADX WARN: Type inference failed for: r6v7, types: [com.ninjatech.minecraftlanbridge.relay.HttpProxyServer] */
+    /* JADX WARN: Type inference failed for: r6v8, types: [com.ninjatech.minecraftlanbridge.relay.HttpProxyServer, java.lang.Object] */
+    /* JADX WARN: Type inference failed for: r6v9, types: [com.ninjatech.minecraftlanbridge.relay.HttpProxyServer, java.lang.Object] */
+    /*
+        Code decompiled incorrectly, please refer to instructions dump.
+    */
+    public final Object handleConnection(Socket socket, String str, int i, DiscoveryInfo discoveryInfo, Continuation<? super Unit> continuation) throws Throwable {
+        C09511 c09511;
+        ?? r3;
+        Throwable th;
+        ?? r32;
+        Exception exc;
+        Socket socket2;
+        Socket socket3;
+        Socket socket4;
+        Socket socket5;
+        Object obj;
+        ?? r6;
+        ?? r62;
+        HttpProxyServer httpProxyServer;
+        Socket socket6;
+        Socket socket7;
+        InputStream inputStream;
+        OutputStream outputStream;
+        byte[] headerBlock;
+        String str2;
+        String hostAddress;
+        String str3;
+        Object obj2;
+        Object obj3;
+        char[] cArr;
+        List list;
+        String upperCase;
+        String str4;
+        String str5;
+        String str6;
+        String str7;
+        String str8;
+        String str9;
+        Object obj4;
+        String str10;
+        ArrayList arrayList;
+        Object obj5;
+        int iIntValue;
+        String str11;
+        Object objWithContext;
+        Object obj6;
+        String str12;
+        String str13;
+        String str14;
+        List list2;
+        Object obj7;
+        String str15;
+        ArrayList arrayList2;
+        String str16;
+        Object objWithContext2;
+        InputStream inputStream2;
+        Integer num;
+        C09522 c09522;
+        OutputStream outputStream2;
+        Object obj8;
+        String str17;
+        Socket socket8;
+        InputStream inputStream3;
+        String str18;
+        String str19;
+        Socket socket9;
+        List list3;
+        ?? r2 = " ";
+        if (continuation instanceof C09511) {
+            C09511 c095112 = (C09511) continuation;
+            if ((c095112.label & Integer.MIN_VALUE) != 0) {
+                c095112.label -= Integer.MIN_VALUE;
+                c09511 = c095112;
+            } else {
+                c09511 = new C09511(continuation);
+            }
+        }
+        Object obj9 = c09511.result;
+        ?? coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+        HttpProxyServer httpProxyServer2 = c09511.label;
+        String str20 = "getBytes(...)";
+        try {
+            try {
+            } catch (IOException e) {
+                r2 = obj9;
+                coroutine_suspended = obj;
+            } catch (Exception e2) {
+                exc = e2;
+                socket5 = socket4;
+                r32 = obj9;
+                r62 = httpProxyServer2;
+            } catch (Throwable th2) {
+                th = th2;
+                socket3 = socket2;
+                r3 = obj9;
+                r6 = httpProxyServer2;
+            }
+        } catch (IOException e3) {
+        } catch (Exception e4) {
+            r32 = r2;
+            exc = e4;
+            socket5 = coroutine_suspended;
+            r62 = httpProxyServer2;
+        } catch (Throwable th3) {
+            r3 = r2;
+            th = th3;
+            socket3 = coroutine_suspended;
+            r6 = httpProxyServer2;
+        }
+        switch (httpProxyServer2) {
+            case 0:
+                ResultKt.throwOnFailure(obj9);
+                httpProxyServer2 = this;
+                socket7 = socket;
+                httpProxyServer2._status.setValue(ProxyStatus.copy$default(httpProxyServer2._status.getValue(), false, null, 0, httpProxyServer2.activeConnections.incrementAndGet(), null, 23, null));
+                httpProxyServer2.activeSockets.add(socket7);
+                r3 = 0;
+                r32 = 0;
+                r3 = 0;
+                r32 = 0;
+                try {
+                    socket7.setTcpNoDelay(true);
+                    socket7.setKeepAlive(true);
+                    socket7.setSoTimeout(AccessibilityNodeInfoCompat.EXTRA_DATA_TEXT_CHARACTER_LOCATION_ARG_MAX_LENGTH);
+                    inputStream = socket7.getInputStream();
+                    outputStream = socket7.getOutputStream();
+                    try {
+                        try {
+                            Intrinsics.checkNotNull(inputStream);
+                            headerBlock = httpProxyServer2.readHeaderBlock(inputStream);
+                            str2 = " ";
+                            try {
+                            } catch (IOException e5) {
+                                r2 = 0;
+                                coroutine_suspended = socket7;
+                            }
+                        } catch (IOException e6) {
+                            try {
+                                Unit unit = Unit.INSTANCE;
+                                httpProxyServer2.activeSockets.remove(socket7);
+                                httpProxyServer2.activeSockets.remove(null);
+                                httpProxyServer2.closeQuietly(null);
+                                httpProxyServer2.closeQuietly(socket7);
+                                httpProxyServer2._status.setValue(ProxyStatus.copy$default(httpProxyServer2._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer2.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                return unit;
+                            } catch (IOException e7) {
+                                r2 = 0;
+                                coroutine_suspended = socket7;
+                            } catch (Exception e8) {
+                                exc = e8;
+                                r32 = 0;
+                                socket5 = socket7;
+                                r62 = httpProxyServer2;
+                                try {
+                                    r62.log.log("Proxy connection error: " + exc.getMessage());
+                                    r62.activeSockets.remove(socket5);
+                                    r62.activeSockets.remove(r32);
+                                    r62.closeQuietly(r32);
+                                    socket6 = socket5;
+                                    httpProxyServer = r62;
+                                    httpProxyServer.closeQuietly(socket6);
+                                    httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                    return Unit.INSTANCE;
+                                } catch (Throwable th4) {
+                                    th = th4;
+                                    r3 = r32;
+                                    socket3 = socket5;
+                                    r6 = r62;
+                                    r6.activeSockets.remove(socket3);
+                                    r6.activeSockets.remove(r3);
+                                    r6.closeQuietly(r3);
+                                    r6.closeQuietly(socket3);
+                                    r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                    throw th;
+                                }
+                            } catch (Throwable th5) {
+                                th = th5;
+                                r3 = 0;
+                                socket3 = socket7;
+                                r6 = httpProxyServer2;
+                                r6.activeSockets.remove(socket3);
+                                r6.activeSockets.remove(r3);
+                                r6.closeQuietly(r3);
+                                r6.closeQuietly(socket3);
+                                r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                throw th;
+                            }
+                        }
+                    } catch (Exception e9) {
+                        exc = e9;
+                        socket5 = socket7;
+                        r62 = httpProxyServer2;
+                    } catch (Throwable th6) {
+                        th = th6;
+                        socket3 = socket7;
+                        r6 = httpProxyServer2;
+                    }
+                } catch (IOException e10) {
+                    r2 = 0;
+                    coroutine_suspended = socket7;
+                } catch (Exception e11) {
+                    exc = e11;
+                    socket5 = socket7;
+                    r62 = httpProxyServer2;
+                } catch (Throwable th7) {
+                    th = th7;
+                    socket3 = socket7;
+                    r6 = httpProxyServer2;
+                }
+                if (headerBlock.length == 0) {
+                    Unit unit2 = Unit.INSTANCE;
+                    httpProxyServer2.activeSockets.remove(socket7);
+                    httpProxyServer2.activeSockets.remove(null);
+                    httpProxyServer2.closeQuietly(null);
+                    httpProxyServer2.closeQuietly(socket7);
+                    httpProxyServer2._status.setValue(ProxyStatus.copy$default(httpProxyServer2._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer2.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    return unit2;
+                }
+                List listSplit$default = StringsKt.split$default((CharSequence) new String(headerBlock, Charsets.ISO_8859_1), new String[]{"\r\n"}, false, 0, 6, (Object) null);
+                String str21 = (String) CollectionsKt.firstOrNull(listSplit$default);
+                if (str21 == null) {
+                    Unit unit3 = Unit.INSTANCE;
+                    httpProxyServer2.activeSockets.remove(socket7);
+                    httpProxyServer2.activeSockets.remove(null);
+                    httpProxyServer2.closeQuietly(null);
+                    httpProxyServer2.closeQuietly(socket7);
+                    httpProxyServer2._status.setValue(ProxyStatus.copy$default(httpProxyServer2._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer2.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    return unit3;
+                }
+                InetAddress inetAddress = socket7.getInetAddress();
+                hostAddress = inetAddress != null ? inetAddress.getHostAddress() : null;
+                if (hostAddress == null) {
+                    hostAddress = "?";
+                }
+                String str22 = str21;
+                str3 = "\r\n";
+                try {
+                    try {
+                        cArr = new char[1];
+                    } catch (IOException e12) {
+                        r2 = 0;
+                        coroutine_suspended = socket7;
+                    }
+                    try {
+                        cArr[0] = ' ';
+                        List listSplit$default2 = StringsKt.split$default((CharSequence) str22, cArr, false, 0, 6, (Object) null);
+                        String str23 = (String) CollectionsKt.getOrNull(listSplit$default2, 0);
+                        if (str23 != null) {
+                            list = listSplit$default;
+                            upperCase = str23.toUpperCase(Locale.ROOT);
+                            Intrinsics.checkNotNullExpressionValue(upperCase, "toUpperCase(...)");
+                        } else {
+                            list = listSplit$default;
+                            upperCase = null;
+                        }
+                        String str24 = (String) CollectionsKt.getOrNull(listSplit$default2, 1);
+                        if (str24 == null) {
+                            str24 = "";
+                        }
+                        str4 = str24;
+                        str5 = ":";
+                        if (!Intrinsics.areEqual(upperCase, "GET") && !Intrinsics.areEqual(upperCase, "HEAD")) {
+                            str6 = " -> ";
+                        } else if (discoveryInfo != null) {
+                            str6 = " -> ";
+                            if (StringsKt.equals(str4, DISCOVERY_PATH, true)) {
+                                Intrinsics.checkNotNull(outputStream);
+                                httpProxyServer2.serveDiscovery(outputStream, discoveryInfo, Intrinsics.areEqual(upperCase, "HEAD"));
+                                httpProxyServer2.log.log("Discovery served to " + hostAddress);
+                                Unit unit4 = Unit.INSTANCE;
+                                httpProxyServer2.activeSockets.remove(socket7);
+                                httpProxyServer2.activeSockets.remove(null);
+                                httpProxyServer2.closeQuietly(null);
+                                httpProxyServer2.closeQuietly(socket7);
+                                httpProxyServer2._status.setValue(ProxyStatus.copy$default(httpProxyServer2._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer2.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                return unit4;
+                            }
+                        } else {
+                            str6 = " -> ";
+                        }
+                    } catch (Exception e13) {
+                        obj3 = null;
+                        exc = e13;
+                        r32 = obj3;
+                        socket5 = socket7;
+                        r62 = httpProxyServer2;
+                        r62.log.log("Proxy connection error: " + exc.getMessage());
+                        r62.activeSockets.remove(socket5);
+                        r62.activeSockets.remove(r32);
+                        r62.closeQuietly(r32);
+                        socket6 = socket5;
+                        httpProxyServer = r62;
+                        httpProxyServer.closeQuietly(socket6);
+                        httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                        return Unit.INSTANCE;
+                    } catch (Throwable th8) {
+                        obj2 = null;
+                        th = th8;
+                        r3 = obj2;
+                        socket3 = socket7;
+                        r6 = httpProxyServer2;
+                        r6.activeSockets.remove(socket3);
+                        r6.activeSockets.remove(r3);
+                        r6.closeQuietly(r3);
+                        r6.closeQuietly(socket3);
+                        r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                        throw th;
+                    }
+                } catch (Exception e14) {
+                    obj3 = null;
+                    exc = e14;
+                } catch (Throwable th9) {
+                    obj2 = null;
+                    th = th9;
+                }
+                if (Intrinsics.areEqual(upperCase, "CONNECT")) {
+                    int iLastIndexOf$default = StringsKt.lastIndexOf$default((CharSequence) str4, ':', 0, false, 6, (Object) null);
+                    if (iLastIndexOf$default > 0 && iLastIndexOf$default != str4.length() - 1) {
+                        String strSubstring = str4.substring(0, iLastIndexOf$default);
+                        Intrinsics.checkNotNullExpressionValue(strSubstring, "substring(...)");
+                        str16 = strSubstring;
+                        String strSubstring2 = str4.substring(iLastIndexOf$default + 1);
+                        Intrinsics.checkNotNullExpressionValue(strSubstring2, "substring(...)");
+                        Integer intOrNull = StringsKt.toIntOrNull(strSubstring2);
+                        if (intOrNull != null && new IntRange(1, 65535).contains(intOrNull.intValue())) {
+                            CoroutineDispatcher io = Dispatchers.getIO();
+                            HttpProxyServer$handleConnection$tunnel$1 httpProxyServer$handleConnection$tunnel$1 = new HttpProxyServer$handleConnection$tunnel$1(str16, intOrNull, null);
+                            c09511.L$0 = httpProxyServer2;
+                            c09511.L$1 = socket7;
+                            c09511.L$2 = inputStream;
+                            c09511.L$3 = outputStream;
+                            c09511.L$4 = hostAddress;
+                            c09511.L$5 = str16;
+                            c09511.L$6 = intOrNull;
+                            c09511.label = 1;
+                            objWithContext2 = BuildersKt.withContext(io, httpProxyServer$handleConnection$tunnel$1, c09511);
+                            if (objWithContext2 == coroutine_suspended) {
+                                return coroutine_suspended;
+                            }
+                            inputStream2 = inputStream;
+                            num = intOrNull;
+                            r2 = 0;
+                            httpProxyServer2 = httpProxyServer2;
+                            try {
+                                Socket socket10 = (Socket) objWithContext2;
+                                r2 = socket10;
+                                byte[] bytes = "HTTP/1.1 200 Connection Established\r\nProxy-Agent: MinecraftLANBridge\r\n\r\n".getBytes(Charsets.ISO_8859_1);
+                                Intrinsics.checkNotNullExpressionValue(bytes, "getBytes(...)");
+                                outputStream.write(bytes);
+                                outputStream.flush();
+                                socket7.setSoTimeout(0);
+                                httpProxyServer2.log.log("Tunnel " + hostAddress + str6 + str16 + str5 + num);
+                                c09522 = httpProxyServer2.new C09522(socket7, socket10, inputStream2, outputStream, null);
+                                c09511.L$0 = httpProxyServer2;
+                                c09511.L$1 = socket7;
+                                c09511.L$2 = r2;
+                                c09511.L$3 = null;
+                                c09511.L$4 = null;
+                                c09511.L$5 = null;
+                                c09511.L$6 = null;
+                                c09511.label = 2;
+                            } catch (IOException e15) {
+                                coroutine_suspended = socket7;
+                            } catch (Exception e16) {
+                                r32 = r2;
+                                socket5 = socket7;
+                                exc = e16;
+                                r62 = httpProxyServer2;
+                                r62.log.log("Proxy connection error: " + exc.getMessage());
+                                r62.activeSockets.remove(socket5);
+                                r62.activeSockets.remove(r32);
+                                r62.closeQuietly(r32);
+                                socket6 = socket5;
+                                httpProxyServer = r62;
+                                httpProxyServer.closeQuietly(socket6);
+                                httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                return Unit.INSTANCE;
+                            } catch (Throwable th10) {
+                                r3 = r2;
+                                socket3 = socket7;
+                                th = th10;
+                                r6 = httpProxyServer2;
+                                r6.activeSockets.remove(socket3);
+                                r6.activeSockets.remove(r3);
+                                r6.closeQuietly(r3);
+                                r6.closeQuietly(socket3);
+                                r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                throw th;
+                            }
+                            if (CoroutineScopeKt.coroutineScope(c09522, c09511) != coroutine_suspended) {
+                                return coroutine_suspended;
+                            }
+                            coroutine_suspended = socket7;
+                            httpProxyServer2.activeSockets.remove(coroutine_suspended);
+                            httpProxyServer2.activeSockets.remove(r2);
+                            httpProxyServer2.closeQuietly(r2);
+                            socket6 = coroutine_suspended;
+                            httpProxyServer = httpProxyServer2;
+                            httpProxyServer.closeQuietly(socket6);
+                            httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                            return Unit.INSTANCE;
+                        }
+                        Intrinsics.checkNotNull(outputStream);
+                        httpProxyServer2.writeSimpleResponse(outputStream, "400 Bad Request", "Bad CONNECT port");
+                        Unit unit5 = Unit.INSTANCE;
+                        httpProxyServer2.activeSockets.remove(socket7);
+                        httpProxyServer2.activeSockets.remove(null);
+                        httpProxyServer2.closeQuietly(null);
+                        httpProxyServer2.closeQuietly(socket7);
+                        httpProxyServer2._status.setValue(ProxyStatus.copy$default(httpProxyServer2._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer2.activeConnections.decrementAndGet(), 0), null, 23, null));
+                        return unit5;
+                    }
+                    Intrinsics.checkNotNull(outputStream);
+                    httpProxyServer2.writeSimpleResponse(outputStream, "400 Bad Request", "Bad CONNECT target: " + str4);
+                    httpProxyServer2.log.log("Proxy bad CONNECT from " + hostAddress + ": " + str4);
+                    Unit unit6 = Unit.INSTANCE;
+                    httpProxyServer2.activeSockets.remove(socket7);
+                    httpProxyServer2.activeSockets.remove(null);
+                    httpProxyServer2.closeQuietly(null);
+                    httpProxyServer2.closeQuietly(socket7);
+                    httpProxyServer2._status.setValue(ProxyStatus.copy$default(httpProxyServer2._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer2.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    return unit6;
+                }
+                String str25 = ": ";
+                String str26 = str6;
+                ArrayList arrayList3 = new ArrayList();
+                str7 = str5;
+                int size = list.size();
+                str8 = str26;
+                int i2 = 1;
+                Object obj10 = coroutine_suspended;
+                while (true) {
+                    if (i2 < size) {
+                        int i3 = size;
+                        List list4 = list;
+                        String str27 = (String) list4.get(i2);
+                        if (str27.length() == 0) {
+                            str9 = str25;
+                            obj4 = obj10;
+                            str10 = str20;
+                            arrayList = arrayList3;
+                        } else {
+                            int iIndexOf$default = StringsKt.indexOf$default((CharSequence) str27, ':', 0, false, 6, (Object) null);
+                            String str28 = str25;
+                            if (iIndexOf$default > 0) {
+                                obj7 = obj10;
+                                str15 = str20;
+                                String strSubstring3 = str27.substring(0, iIndexOf$default);
+                                Intrinsics.checkNotNullExpressionValue(strSubstring3, "substring(...)");
+                                String string = StringsKt.trim((CharSequence) strSubstring3).toString();
+                                String strSubstring4 = str27.substring(iIndexOf$default + 1);
+                                Intrinsics.checkNotNullExpressionValue(strSubstring4, "substring(...)");
+                                Pair pairM153to = TuplesKt.m153to(string, StringsKt.trim((CharSequence) strSubstring4).toString());
+                                arrayList2 = arrayList3;
+                                arrayList2.add(pairM153to);
+                            } else {
+                                obj7 = obj10;
+                                str15 = str20;
+                                arrayList2 = arrayList3;
+                            }
+                            i2++;
+                            arrayList3 = arrayList2;
+                            size = i3;
+                            list = list4;
+                            str25 = str28;
+                            str20 = str15;
+                            obj10 = obj7;
+                        }
+                    } else {
+                        str9 = str25;
+                        obj4 = obj10;
+                        str10 = str20;
+                        arrayList = arrayList3;
+                    }
+                }
+                int i4 = 0;
+                Iterator it = arrayList.iterator();
+                while (true) {
+                    if (it.hasNext()) {
+                        Object next = it.next();
+                        int i5 = i4;
+                        Iterator it2 = it;
+                        if (StringsKt.equals((String) ((Pair) next).getFirst(), "Host", true)) {
+                            obj5 = next;
+                        } else {
+                            i4 = i5;
+                            it = it2;
+                        }
+                    } else {
+                        obj5 = null;
+                    }
+                }
+                Pair pair = (Pair) obj5;
+                String str29 = pair != null ? (String) pair.getSecond() : null;
+                if (str29 == null) {
+                    Intrinsics.checkNotNull(outputStream);
+                    httpProxyServer2.writeSimpleResponse(outputStream, "400 Bad Request", "No Host header");
+                    Unit unit7 = Unit.INSTANCE;
+                    httpProxyServer2.activeSockets.remove(socket7);
+                    httpProxyServer2.activeSockets.remove(null);
+                    httpProxyServer2.closeQuietly(null);
+                    httpProxyServer2.closeQuietly(socket7);
+                    httpProxyServer2._status.setValue(ProxyStatus.copy$default(httpProxyServer2._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer2.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    return unit7;
+                }
+                Pair<String, Integer> hostPort = httpProxyServer2.parseHostPort(str29, 80);
+                String strComponent1 = hostPort.component1();
+                iIntValue = hostPort.component2().intValue();
+                try {
+                    if (StringsKt.startsWith$default(str4, "http://", false, 2, (Object) null)) {
+                        String strSubstring5 = str4.substring(7);
+                        Intrinsics.checkNotNullExpressionValue(strSubstring5, "substring(...)");
+                        int iIndexOf$default2 = StringsKt.indexOf$default((CharSequence) strSubstring5, '/', 0, false, 6, (Object) null);
+                        if (iIndexOf$default2 < 0) {
+                            str4 = "/";
+                        } else {
+                            String strSubstring6 = strSubstring5.substring(iIndexOf$default2);
+                            Intrinsics.checkNotNullExpressionValue(strSubstring6, "substring(...)");
+                            str4 = strSubstring6;
+                        }
+                    }
+                    str11 = str4;
+                    CoroutineDispatcher io2 = Dispatchers.getIO();
+                    HttpProxyServer$handleConnection$upstream$1 httpProxyServer$handleConnection$upstream$1 = new HttpProxyServer$handleConnection$upstream$1(strComponent1, iIntValue, null);
+                    c09511.L$0 = httpProxyServer2;
+                    c09511.L$1 = socket7;
+                    c09511.L$2 = outputStream;
+                    c09511.L$3 = hostAddress;
+                    c09511.L$4 = upperCase;
+                    c09511.L$5 = arrayList;
+                    c09511.L$6 = strComponent1;
+                    c09511.L$7 = str11;
+                    c09511.I$0 = iIntValue;
+                    c09511.label = 3;
+                    objWithContext = BuildersKt.withContext(io2, httpProxyServer$handleConnection$upstream$1, c09511);
+                    obj6 = obj4;
+                } catch (IOException e17) {
+                    r2 = 0;
+                    coroutine_suspended = socket7;
+                } catch (Exception e18) {
+                    r32 = 0;
+                    exc = e18;
+                    socket5 = socket7;
+                    r62 = httpProxyServer2;
+                    r62.log.log("Proxy connection error: " + exc.getMessage());
+                    r62.activeSockets.remove(socket5);
+                    r62.activeSockets.remove(r32);
+                    r62.closeQuietly(r32);
+                    socket6 = socket5;
+                    httpProxyServer = r62;
+                    httpProxyServer.closeQuietly(socket6);
+                    httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    return Unit.INSTANCE;
+                } catch (Throwable th11) {
+                    r3 = 0;
+                    th = th11;
+                    socket3 = socket7;
+                    r6 = httpProxyServer2;
+                    r6.activeSockets.remove(socket3);
+                    r6.activeSockets.remove(r3);
+                    r6.closeQuietly(r3);
+                    r6.closeQuietly(socket3);
+                    r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    throw th;
+                }
+                if (objWithContext == obj6) {
+                    return obj6;
+                }
+                str12 = upperCase;
+                r2 = 0;
+                str13 = strComponent1;
+                str14 = hostAddress;
+                list2 = arrayList;
+                coroutine_suspended = socket7;
+                httpProxyServer2 = httpProxyServer2;
+                try {
+                    Socket socket11 = (Socket) objWithContext;
+                    r2 = socket11;
+                    try {
+                        outputStream2 = socket11.getOutputStream();
+                        obj8 = obj6;
+                        String str30 = str2;
+                        try {
+                            byte[] bytes2 = (str12 + str30 + str11 + " HTTP/1.1\r\n").getBytes(Charsets.ISO_8859_1);
+                            str17 = str10;
+                            Intrinsics.checkNotNullExpressionValue(bytes2, str17);
+                            outputStream2.write(bytes2);
+                            List<Pair> list5 = list2;
+                            List list6 = null;
+                            coroutine_suspended = coroutine_suspended;
+                            for (Pair pair2 : list5) {
+                                try {
+                                    str18 = (String) pair2.component1();
+                                    str19 = (String) pair2.component2();
+                                    socket9 = coroutine_suspended;
+                                    list3 = list6;
+                                } catch (IOException e19) {
+                                    r2 = r2;
+                                } catch (Exception e20) {
+                                    r32 = r2;
+                                    exc = e20;
+                                    socket5 = coroutine_suspended;
+                                    r62 = httpProxyServer2;
+                                } catch (Throwable th12) {
+                                    r3 = r2;
+                                    th = th12;
+                                    socket3 = coroutine_suspended;
+                                    r6 = httpProxyServer2;
+                                }
+                                try {
+                                    if (!StringsKt.equals(str18, "Proxy-Connection", true) && !StringsKt.equals(str18, "Proxy-Authorization", true)) {
+                                        String str31 = str9;
+                                        str9 = str31;
+                                        StringBuilder sbAppend = new StringBuilder().append(str18).append(str31).append(str19);
+                                        String str32 = str3;
+                                        str3 = str32;
+                                        byte[] bytes3 = sbAppend.append(str32).toString().getBytes(Charsets.ISO_8859_1);
+                                        Intrinsics.checkNotNullExpressionValue(bytes3, str17);
+                                        outputStream2.write(bytes3);
+                                    }
+                                    list6 = list3;
+                                    coroutine_suspended = socket9;
+                                } catch (IOException e21) {
+                                    r2 = r2;
+                                    coroutine_suspended = socket9;
+                                } catch (Exception e22) {
+                                    r32 = r2;
+                                    exc = e22;
+                                    socket5 = socket9;
+                                    r62 = httpProxyServer2;
+                                    r62.log.log("Proxy connection error: " + exc.getMessage());
+                                    r62.activeSockets.remove(socket5);
+                                    r62.activeSockets.remove(r32);
+                                    r62.closeQuietly(r32);
+                                    socket6 = socket5;
+                                    httpProxyServer = r62;
+                                    httpProxyServer.closeQuietly(socket6);
+                                    httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                    return Unit.INSTANCE;
+                                } catch (Throwable th13) {
+                                    r3 = r2;
+                                    th = th13;
+                                    socket3 = socket9;
+                                    r6 = httpProxyServer2;
+                                    r6.activeSockets.remove(socket3);
+                                    r6.activeSockets.remove(r3);
+                                    r6.closeQuietly(r3);
+                                    r6.closeQuietly(socket3);
+                                    r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                    throw th;
+                                }
+                            }
+                            socket8 = coroutine_suspended;
+                            try {
+                                byte[] bytes4 = "Connection: close\r\n\r\n".getBytes(Charsets.ISO_8859_1);
+                                Intrinsics.checkNotNullExpressionValue(bytes4, str17);
+                                outputStream2.write(bytes4);
+                                outputStream2.flush();
+                                httpProxyServer2.log.log("Proxy " + str12 + str30 + str14 + str8 + str13 + str7 + iIntValue + str30 + str11);
+                                inputStream3 = socket11.getInputStream();
+                                Intrinsics.checkNotNullExpressionValue(inputStream3, "getInputStream(...)");
+                                Intrinsics.checkNotNull(outputStream);
+                                c09511.L$0 = httpProxyServer2;
+                                try {
+                                    c09511.L$1 = socket8;
+                                    c09511.L$2 = r2;
+                                    c09511.L$3 = null;
+                                    c09511.L$4 = null;
+                                    c09511.L$5 = null;
+                                    c09511.L$6 = null;
+                                    c09511.L$7 = null;
+                                    c09511.label = 4;
+                                } catch (IOException e23) {
+                                    r2 = r2;
+                                    coroutine_suspended = socket8;
+                                } catch (Exception e24) {
+                                    r32 = r2;
+                                    exc = e24;
+                                    socket5 = socket8;
+                                    r62 = httpProxyServer2;
+                                    r62.log.log("Proxy connection error: " + exc.getMessage());
+                                    r62.activeSockets.remove(socket5);
+                                    r62.activeSockets.remove(r32);
+                                    r62.closeQuietly(r32);
+                                    socket6 = socket5;
+                                    httpProxyServer = r62;
+                                    httpProxyServer.closeQuietly(socket6);
+                                    httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                    return Unit.INSTANCE;
+                                } catch (Throwable th14) {
+                                    r3 = r2;
+                                    th = th14;
+                                    socket3 = socket8;
+                                    r6 = httpProxyServer2;
+                                    r6.activeSockets.remove(socket3);
+                                    r6.activeSockets.remove(r3);
+                                    r6.closeQuietly(r3);
+                                    r6.closeQuietly(socket3);
+                                    r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                                    throw th;
+                                }
+                            } catch (IOException e25) {
+                                r2 = r2;
+                                coroutine_suspended = socket8;
+                            } catch (Exception e26) {
+                                r32 = r2;
+                                exc = e26;
+                                socket5 = socket8;
+                                r62 = httpProxyServer2;
+                            } catch (Throwable th15) {
+                                r3 = r2;
+                                th = th15;
+                                socket3 = socket8;
+                                r6 = httpProxyServer2;
+                            }
+                        } catch (IOException e27) {
+                            r2 = r2;
+                        } catch (Exception e28) {
+                            r32 = r2;
+                            exc = e28;
+                            socket5 = coroutine_suspended;
+                            r62 = httpProxyServer2;
+                        } catch (Throwable th16) {
+                            r3 = r2;
+                            th = th16;
+                            socket3 = coroutine_suspended;
+                            r6 = httpProxyServer2;
+                        }
+                    } catch (IOException e29) {
+                    } catch (Exception e30) {
+                        r32 = r2;
+                        exc = e30;
+                        socket5 = coroutine_suspended;
+                        r62 = httpProxyServer2;
+                    } catch (Throwable th17) {
+                        r3 = r2;
+                        th = th17;
+                        socket3 = coroutine_suspended;
+                        r6 = httpProxyServer2;
+                    }
+                } catch (IOException e31) {
+                } catch (Exception e32) {
+                    r32 = r2;
+                    exc = e32;
+                    socket5 = coroutine_suspended;
+                    r62 = httpProxyServer2;
+                } catch (Throwable th18) {
+                    r3 = r2;
+                    th = th18;
+                    socket3 = coroutine_suspended;
+                    r6 = httpProxyServer2;
+                }
+                if (httpProxyServer2.copy(inputStream3, outputStream, c09511) != obj8) {
+                    return obj8;
+                }
+                r2 = r2;
+                coroutine_suspended = socket8;
+                httpProxyServer2.activeSockets.remove(coroutine_suspended);
+                httpProxyServer2.activeSockets.remove(r2);
+                httpProxyServer2.closeQuietly(r2);
+                socket6 = coroutine_suspended;
+                httpProxyServer = httpProxyServer2;
+                httpProxyServer.closeQuietly(socket6);
+                httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                return Unit.INSTANCE;
+            case 1:
+                Integer num2 = (Integer) c09511.L$6;
+                str16 = (String) c09511.L$5;
+                String str33 = (String) c09511.L$4;
+                OutputStream outputStream3 = (OutputStream) c09511.L$3;
+                inputStream2 = (InputStream) c09511.L$2;
+                Socket socket12 = (Socket) c09511.L$1;
+                HttpProxyServer httpProxyServer3 = (HttpProxyServer) c09511.L$0;
+                try {
+                    ResultKt.throwOnFailure(obj9);
+                    str5 = ":";
+                    str6 = " -> ";
+                    num = num2;
+                    r2 = 0;
+                    socket7 = socket12;
+                    outputStream = outputStream3;
+                    objWithContext2 = obj9;
+                    hostAddress = str33;
+                    httpProxyServer2 = httpProxyServer3;
+                    Socket socket102 = (Socket) objWithContext2;
+                    r2 = socket102;
+                    byte[] bytes5 = "HTTP/1.1 200 Connection Established\r\nProxy-Agent: MinecraftLANBridge\r\n\r\n".getBytes(Charsets.ISO_8859_1);
+                    Intrinsics.checkNotNullExpressionValue(bytes5, "getBytes(...)");
+                    outputStream.write(bytes5);
+                    outputStream.flush();
+                    socket7.setSoTimeout(0);
+                    httpProxyServer2.log.log("Tunnel " + hostAddress + str6 + str16 + str5 + num);
+                    c09522 = httpProxyServer2.new C09522(socket7, socket102, inputStream2, outputStream, null);
+                    c09511.L$0 = httpProxyServer2;
+                    c09511.L$1 = socket7;
+                    c09511.L$2 = r2;
+                    c09511.L$3 = null;
+                    c09511.L$4 = null;
+                    c09511.L$5 = null;
+                    c09511.L$6 = null;
+                    c09511.label = 2;
+                    if (CoroutineScopeKt.coroutineScope(c09522, c09511) != coroutine_suspended) {
+                    }
+                } catch (IOException e33) {
+                    r2 = 0;
+                    coroutine_suspended = socket12;
+                    httpProxyServer2 = httpProxyServer3;
+                    break;
+                } catch (Exception e34) {
+                    exc = e34;
+                    r32 = 0;
+                    socket5 = socket12;
+                    r62 = httpProxyServer3;
+                    r62.log.log("Proxy connection error: " + exc.getMessage());
+                    r62.activeSockets.remove(socket5);
+                    r62.activeSockets.remove(r32);
+                    r62.closeQuietly(r32);
+                    socket6 = socket5;
+                    httpProxyServer = r62;
+                    httpProxyServer.closeQuietly(socket6);
+                    httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    return Unit.INSTANCE;
+                } catch (Throwable th19) {
+                    th = th19;
+                    r3 = 0;
+                    socket3 = socket12;
+                    r6 = httpProxyServer3;
+                    r6.activeSockets.remove(socket3);
+                    r6.activeSockets.remove(r3);
+                    r6.closeQuietly(r3);
+                    r6.closeQuietly(socket3);
+                    r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    throw th;
+                }
+                break;
+            case 2:
+                Socket socket13 = (Socket) c09511.L$2;
+                Socket socket14 = (Socket) c09511.L$1;
+                HttpProxyServer httpProxyServer4 = (HttpProxyServer) c09511.L$0;
+                ResultKt.throwOnFailure(obj9);
+                r2 = socket13;
+                coroutine_suspended = socket14;
+                httpProxyServer2 = httpProxyServer4;
+                httpProxyServer2.activeSockets.remove(coroutine_suspended);
+                httpProxyServer2.activeSockets.remove(r2);
+                httpProxyServer2.closeQuietly(r2);
+                socket6 = coroutine_suspended;
+                httpProxyServer = httpProxyServer2;
+                httpProxyServer.closeQuietly(socket6);
+                httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                return Unit.INSTANCE;
+            case 3:
+                int i6 = c09511.I$0;
+                String str34 = (String) c09511.L$7;
+                str13 = (String) c09511.L$6;
+                list2 = (List) c09511.L$5;
+                String str35 = (String) c09511.L$4;
+                String str36 = (String) c09511.L$3;
+                OutputStream outputStream4 = (OutputStream) c09511.L$2;
+                Socket socket15 = (Socket) c09511.L$1;
+                HttpProxyServer httpProxyServer5 = (HttpProxyServer) c09511.L$0;
+                try {
+                    ResultKt.throwOnFailure(obj9);
+                    str9 = ": ";
+                    str7 = ":";
+                    str3 = "\r\n";
+                    str8 = " -> ";
+                    str10 = "getBytes(...)";
+                    str12 = str35;
+                    outputStream = outputStream4;
+                    objWithContext = obj9;
+                    obj6 = coroutine_suspended;
+                    str11 = str34;
+                    coroutine_suspended = socket15;
+                    iIntValue = i6;
+                    httpProxyServer2 = httpProxyServer5;
+                    str14 = str36;
+                    str2 = " ";
+                    r2 = 0;
+                    Socket socket112 = (Socket) objWithContext;
+                    r2 = socket112;
+                    outputStream2 = socket112.getOutputStream();
+                    obj8 = obj6;
+                    String str302 = str2;
+                    byte[] bytes22 = (str12 + str302 + str11 + " HTTP/1.1\r\n").getBytes(Charsets.ISO_8859_1);
+                    str17 = str10;
+                    Intrinsics.checkNotNullExpressionValue(bytes22, str17);
+                    outputStream2.write(bytes22);
+                    List<Pair> list52 = list2;
+                    List list62 = null;
+                    coroutine_suspended = coroutine_suspended;
+                    while (r16.hasNext()) {
+                    }
+                    socket8 = coroutine_suspended;
+                    byte[] bytes42 = "Connection: close\r\n\r\n".getBytes(Charsets.ISO_8859_1);
+                    Intrinsics.checkNotNullExpressionValue(bytes42, str17);
+                    outputStream2.write(bytes42);
+                    outputStream2.flush();
+                    httpProxyServer2.log.log("Proxy " + str12 + str302 + str14 + str8 + str13 + str7 + iIntValue + str302 + str11);
+                    inputStream3 = socket112.getInputStream();
+                    Intrinsics.checkNotNullExpressionValue(inputStream3, "getInputStream(...)");
+                    Intrinsics.checkNotNull(outputStream);
+                    c09511.L$0 = httpProxyServer2;
+                    c09511.L$1 = socket8;
+                    c09511.L$2 = r2;
+                    c09511.L$3 = null;
+                    c09511.L$4 = null;
+                    c09511.L$5 = null;
+                    c09511.L$6 = null;
+                    c09511.L$7 = null;
+                    c09511.label = 4;
+                    if (httpProxyServer2.copy(inputStream3, outputStream, c09511) != obj8) {
+                    }
+                } catch (IOException e35) {
+                    httpProxyServer2 = httpProxyServer5;
+                    r2 = 0;
+                    coroutine_suspended = socket15;
+                    break;
+                } catch (Exception e36) {
+                    exc = e36;
+                    r62 = httpProxyServer5;
+                    r32 = 0;
+                    socket5 = socket15;
+                    r62.log.log("Proxy connection error: " + exc.getMessage());
+                    r62.activeSockets.remove(socket5);
+                    r62.activeSockets.remove(r32);
+                    r62.closeQuietly(r32);
+                    socket6 = socket5;
+                    httpProxyServer = r62;
+                    httpProxyServer.closeQuietly(socket6);
+                    httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    return Unit.INSTANCE;
+                } catch (Throwable th20) {
+                    th = th20;
+                    r6 = httpProxyServer5;
+                    r3 = 0;
+                    socket3 = socket15;
+                    r6.activeSockets.remove(socket3);
+                    r6.activeSockets.remove(r3);
+                    r6.closeQuietly(r3);
+                    r6.closeQuietly(socket3);
+                    r6._status.setValue(ProxyStatus.copy$default(r6._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(r6.activeConnections.decrementAndGet(), 0), null, 23, null));
+                    throw th;
+                }
+                break;
+            case 4:
+                Socket socket16 = (Socket) c09511.L$2;
+                Socket socket17 = (Socket) c09511.L$1;
+                HttpProxyServer httpProxyServer6 = (HttpProxyServer) c09511.L$0;
+                ResultKt.throwOnFailure(obj9);
+                r2 = socket16;
+                coroutine_suspended = socket17;
+                httpProxyServer2 = httpProxyServer6;
+                httpProxyServer2.activeSockets.remove(coroutine_suspended);
+                httpProxyServer2.activeSockets.remove(r2);
+                httpProxyServer2.closeQuietly(r2);
+                socket6 = coroutine_suspended;
+                httpProxyServer = httpProxyServer2;
+                httpProxyServer.closeQuietly(socket6);
+                httpProxyServer._status.setValue(ProxyStatus.copy$default(httpProxyServer._status.getValue(), false, null, 0, RangesKt.coerceAtLeast(httpProxyServer.activeConnections.decrementAndGet(), 0), null, 23, null));
+                return Unit.INSTANCE;
+            default:
+                throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+        }
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$handleConnection$2", m162f = "HttpProxyServer.kt", m163i = {0, 0, 1}, m164l = {468, 269, 270}, m165m = "invokeSuspend", m166n = {"c2o", "o2c", "o2c"}, m167s = {"L$0", "L$1", "L$0"})
+    /* renamed from: com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$handleConnection$2 */
+    static final class C09522 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        final /* synthetic */ Socket $client;
+        final /* synthetic */ OutputStream $output;
+        final /* synthetic */ InputStream $rawInput;
+        final /* synthetic */ Socket $tunnel;
+        private /* synthetic */ Object L$0;
+        Object L$1;
+        int label;
+
+        /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+        C09522(Socket socket, Socket socket2, InputStream inputStream, OutputStream outputStream, Continuation<? super C09522> continuation) {
+            super(2, continuation);
+            this.$client = socket;
+            this.$tunnel = socket2;
+            this.$rawInput = inputStream;
+            this.$output = outputStream;
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            C09522 c09522 = HttpProxyServer.this.new C09522(this.$client, this.$tunnel, this.$rawInput, this.$output, continuation);
+            c09522.L$0 = obj;
+            return c09522;
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09522) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        /* JADX WARN: Removed duplicated region for block: B:15:0x00c6 A[RETURN] */
+        /* JADX WARN: Removed duplicated region for block: B:16:0x00c7  */
+        /* JADX WARN: Removed duplicated region for block: B:19:0x00d6 A[RETURN] */
+        /* JADX WARN: Removed duplicated region for block: B:20:0x00d7  */
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        /*
+            Code decompiled incorrectly, please refer to instructions dump.
+        */
+        public final Object invokeSuspend(Object $result) {
+            C09522 c09522;
+            Job o2c;
+            Job c2o;
+            Job o2c2;
+            Object coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            switch (this.label) {
+                case 0:
+                    ResultKt.throwOnFailure($result);
+                    c09522 = this;
+                    CoroutineScope $this$coroutineScope = (CoroutineScope) c09522.L$0;
+                    Job c2o2 = BuildersKt__Builders_commonKt.launch$default($this$coroutineScope, null, null, new HttpProxyServer$handleConnection$2$c2o$1(HttpProxyServer.this, c09522.$rawInput, c09522.$tunnel, null), 3, null);
+                    Job o2c3 = BuildersKt__Builders_commonKt.launch$default($this$coroutineScope, null, null, new HttpProxyServer$handleConnection$2$o2c$1(HttpProxyServer.this, c09522.$tunnel, c09522.$output, null), 3, null);
+                    SelectImplementation $this$select_u24lambda_u241$iv = new SelectImplementation(c09522.getContext());
+                    SelectImplementation $this$invokeSuspend_u24lambda_u240 = $this$select_u24lambda_u241$iv;
+                    $this$invokeSuspend_u24lambda_u240.invoke(c2o2.getOnJoin(), new HttpProxyServer$handleConnection$2$1$1(null));
+                    $this$invokeSuspend_u24lambda_u240.invoke(o2c3.getOnJoin(), new HttpProxyServer$handleConnection$2$1$2(null));
+                    c09522.L$0 = c2o2;
+                    c09522.L$1 = o2c3;
+                    c09522.label = 1;
+                    if ($this$select_u24lambda_u241$iv.doSelect(c09522) == coroutine_suspended) {
+                        return coroutine_suspended;
+                    }
+                    o2c = o2c3;
+                    c2o = c2o2;
+                    HttpProxyServer.this.closeQuietly(c09522.$client);
+                    HttpProxyServer.this.closeQuietly(c09522.$tunnel);
+                    c09522.L$0 = o2c;
+                    c09522.L$1 = null;
+                    c09522.label = 2;
+                    if (c2o.join(c09522) != coroutine_suspended) {
+                        return coroutine_suspended;
+                    }
+                    o2c2 = o2c;
+                    c09522.L$0 = null;
+                    c09522.label = 3;
+                    return o2c2.join(c09522) != coroutine_suspended ? coroutine_suspended : Unit.INSTANCE;
+                case 1:
+                    c09522 = this;
+                    o2c = (Job) c09522.L$1;
+                    c2o = (Job) c09522.L$0;
+                    ResultKt.throwOnFailure($result);
+                    HttpProxyServer.this.closeQuietly(c09522.$client);
+                    HttpProxyServer.this.closeQuietly(c09522.$tunnel);
+                    c09522.L$0 = o2c;
+                    c09522.L$1 = null;
+                    c09522.label = 2;
+                    if (c2o.join(c09522) != coroutine_suspended) {
+                    }
+                    break;
+                case 2:
+                    c09522 = this;
+                    o2c2 = (Job) c09522.L$0;
+                    ResultKt.throwOnFailure($result);
+                    c09522.L$0 = null;
+                    c09522.label = 3;
+                    if (o2c2.join(c09522) != coroutine_suspended) {
+                    }
+                    break;
+                case 3:
+                    ResultKt.throwOnFailure($result);
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+        }
+    }
+
+    private final byte[] readHeaderBlock(InputStream input) throws IOException {
+        int w0;
+        ByteArrayOutputStream out = new ByteArrayOutputStream(512);
+        int[] window = new int[4];
+        int count = 0;
+        do {
+            int b = input.read();
+            if (b == -1) {
+                if (out.size() == 0) {
+                    return new byte[0];
+                }
+                byte[] byteArray = out.toByteArray();
+                Intrinsics.checkNotNullExpressionValue(byteArray, "toByteArray(...)");
+                return byteArray;
+            }
+            out.write(b);
+            window[count & 3] = b;
+            count++;
+            if (count >= 4) {
+                int w02 = window[(count - 4) & 3];
+                int w1 = window[(count - 3) & 3];
+                int w2 = window[(count - 2) & 3];
+                int w3 = window[(count - 1) & 3];
+                if (w02 == 13 && w1 == 10 && w2 == 13 && w3 == 10) {
+                    byte[] byteArray2 = out.toByteArray();
+                    Intrinsics.checkNotNullExpressionValue(byteArray2, "toByteArray(...)");
+                    return byteArray2;
+                }
+            }
+            w0 = out.size();
+        } while (w0 <= 65536);
+        byte[] byteArray3 = out.toByteArray();
+        Intrinsics.checkNotNullExpressionValue(byteArray3, "toByteArray(...)");
+        return byteArray3;
+    }
+
+    private final Pair<String, Integer> parseHostPort(String hostHeader, int defaultPort) {
+        String h = StringsKt.trim((CharSequence) hostHeader).toString();
+        int colon = StringsKt.lastIndexOf$default((CharSequence) h, ':', 0, false, 6, (Object) null);
+        if (colon > 0 && !StringsKt.startsWith$default(h, "[", false, 2, (Object) null)) {
+            String strSubstring = h.substring(colon + 1);
+            Intrinsics.checkNotNullExpressionValue(strSubstring, "substring(...)");
+            Integer p = StringsKt.toIntOrNull(strSubstring);
+            if (p != null) {
+                String strSubstring2 = h.substring(0, colon);
+                Intrinsics.checkNotNullExpressionValue(strSubstring2, "substring(...)");
+                return TuplesKt.m153to(strSubstring2, p);
+            }
+        }
+        return TuplesKt.m153to(h, Integer.valueOf(defaultPort));
+    }
+
+    private final void serveDiscovery(OutputStream output, DiscoveryInfo info, boolean headOnly) throws IOException {
+        StringBuilder $this$serveDiscovery_u24lambda_u242 = new StringBuilder();
+        $this$serveDiscovery_u24lambda_u242.append('{');
+        $this$serveDiscovery_u24lambda_u242.append("\"lanHost\":\"").append(escapeJson(info.getLanHost())).append("\",");
+        $this$serveDiscovery_u24lambda_u242.append("\"proxyPort\":").append(info.getProxyPort()).append(',');
+        $this$serveDiscovery_u24lambda_u242.append("\"gameRelayPort\":").append(info.getGameRelayPort()).append(',');
+        $this$serveDiscovery_u24lambda_u242.append("\"udpRelayPort\":").append(info.getUdpRelayPort());
+        $this$serveDiscovery_u24lambda_u242.append('}');
+        String json = $this$serveDiscovery_u24lambda_u242.toString();
+        Intrinsics.checkNotNullExpressionValue(json, "toString(...)");
+        byte[] body = json.getBytes(Charsets.UTF_8);
+        Intrinsics.checkNotNullExpressionValue(body, "getBytes(...)");
+        StringBuilder $this$serveDiscovery_u24lambda_u243 = new StringBuilder();
+        $this$serveDiscovery_u24lambda_u243.append("HTTP/1.1 200 OK\r\n");
+        $this$serveDiscovery_u24lambda_u243.append("Content-Type: application/json; charset=utf-8\r\n");
+        $this$serveDiscovery_u24lambda_u243.append("Content-Length: ").append(body.length).append("\r\n");
+        $this$serveDiscovery_u24lambda_u243.append("Cache-Control: no-store\r\n");
+        $this$serveDiscovery_u24lambda_u243.append("Connection: close\r\n\r\n");
+        String string = $this$serveDiscovery_u24lambda_u243.toString();
+        Intrinsics.checkNotNullExpressionValue(string, "toString(...)");
+        byte[] resp = string.getBytes(Charsets.ISO_8859_1);
+        Intrinsics.checkNotNullExpressionValue(resp, "getBytes(...)");
+        try {
+            output.write(resp);
+            if (!headOnly) {
+                output.write(body);
+            }
+            output.flush();
+        } catch (IOException e) {
+        }
+    }
+
+    private final String escapeJson(String s) {
+        return StringsKt.replace$default(StringsKt.replace$default(s, "\\", "\\\\", false, 4, (Object) null), "\"", "\\\"", false, 4, (Object) null);
+    }
+
+    private final void writeSimpleResponse(OutputStream output, String statusLine, String body) throws IOException {
+        byte[] bytes = body.getBytes(Charsets.UTF_8);
+        Intrinsics.checkNotNullExpressionValue(bytes, "getBytes(...)");
+        StringBuilder $this$writeSimpleResponse_u24lambda_u244 = new StringBuilder();
+        $this$writeSimpleResponse_u24lambda_u244.append("HTTP/1.1 ").append(statusLine).append("\r\n");
+        $this$writeSimpleResponse_u24lambda_u244.append("Content-Type: text/plain; charset=utf-8\r\n");
+        $this$writeSimpleResponse_u24lambda_u244.append("Content-Length: ").append(bytes.length).append("\r\n");
+        $this$writeSimpleResponse_u24lambda_u244.append("Connection: close\r\n\r\n");
+        String string = $this$writeSimpleResponse_u24lambda_u244.toString();
+        Intrinsics.checkNotNullExpressionValue(string, "toString(...)");
+        byte[] resp = string.getBytes(Charsets.ISO_8859_1);
+        Intrinsics.checkNotNullExpressionValue(resp, "getBytes(...)");
+        try {
+            output.write(resp);
+            output.write(bytes);
+            output.flush();
+        } catch (IOException e) {
+        }
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$copy$2", m162f = "HttpProxyServer.kt", m163i = {}, m164l = {}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+    /* renamed from: com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$copy$2 */
+    static final class C09502 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        final /* synthetic */ InputStream $input;
+        final /* synthetic */ OutputStream $output;
+        int label;
+
+        /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+        C09502(InputStream inputStream, OutputStream outputStream, Continuation<? super C09502> continuation) {
+            super(2, continuation);
+            this.$input = inputStream;
+            this.$output = outputStream;
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            return new C09502(this.$input, this.$output, continuation);
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09502) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Object invokeSuspend(Object obj) throws IOException {
+            int read;
+            IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            switch (this.label) {
+                case 0:
+                    ResultKt.throwOnFailure(obj);
+                    byte[] buffer = new byte[16384];
+                    while (JobKt.isActive(getContext()) && (read = this.$input.read(buffer)) > 0) {
+                        try {
+                            this.$output.write(buffer, 0, read);
+                            this.$output.flush();
+                        } catch (SocketException e) {
+                        } catch (IOException e2) {
+                        }
+                    }
+                    try {
+                        this.$output.flush();
+                    } catch (Exception e3) {
+                    }
+                    return Unit.INSTANCE;
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+        }
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public final Object copy(InputStream input, OutputStream output, Continuation<? super Unit> continuation) throws Throwable {
+        Object objWithContext = BuildersKt.withContext(Dispatchers.getIO(), new C09502(input, output, null), continuation);
+        return objWithContext == IntrinsicsKt.getCOROUTINE_SUSPENDED() ? objWithContext : Unit.INSTANCE;
+    }
+
+    /* compiled from: HttpProxyServer.kt */
+    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$stop$2", m162f = "HttpProxyServer.kt", m163i = {}, m164l = {}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+    /* renamed from: com.ninjatech.minecraftlanbridge.relay.HttpProxyServer$stop$2 */
+    static final class C09542 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+        private /* synthetic */ Object L$0;
+        int label;
+
+        C09542(Continuation<? super C09542> continuation) {
+            super(2, continuation);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+            C09542 c09542 = HttpProxyServer.this.new C09542(continuation);
+            c09542.L$0 = obj;
+            return c09542;
+        }
+
+        @Override // kotlin.jvm.functions.Function2
+        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+            return ((C09542) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+        }
+
+        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+        public final Object invokeSuspend(Object obj) {
+            Unit unit;
+            IntrinsicsKt.getCOROUTINE_SUSPENDED();
+            switch (this.label) {
+                case 0:
+                    ResultKt.throwOnFailure(obj);
+                    HttpProxyServer.this.getLog().log("Stopping proxy…");
+                    HttpProxyServer httpProxyServer = HttpProxyServer.this;
+                    try {
+                        Result.Companion companion = Result.INSTANCE;
+                        ServerSocket serverSocket = httpProxyServer.serverSocket;
+                        if (serverSocket != null) {
+                            serverSocket.close();
+                            unit = Unit.INSTANCE;
+                        } else {
+                            unit = null;
+                        }
+                        Result.m255constructorimpl(unit);
+                    } catch (Throwable th) {
+                        Result.Companion companion2 = Result.INSTANCE;
+                        Result.m255constructorimpl(ResultKt.createFailure(th));
+                    }
+                    HttpProxyServer.this.serverSocket = null;
+                    Job job = HttpProxyServer.this.listenJob;
+                    if (job != null) {
+                        Job.DefaultImpls.cancel$default(job, (CancellationException) null, 1, (Object) null);
+                    }
+                    HttpProxyServer.this.listenJob = null;
+                    CoroutineScope coroutineScope = HttpProxyServer.this.connectionsScope;
+                    if (coroutineScope != null) {
+                        CoroutineScopeKt.cancel$default(coroutineScope, null, 1, null);
+                    }
+                    HttpProxyServer.this.connectionsScope = null;
+                    Set set = HttpProxyServer.this.activeSockets;
+                    Intrinsics.checkNotNullExpressionValue(set, "access$getActiveSockets$p(...)");
+                    HttpProxyServer httpProxyServer2 = HttpProxyServer.this;
+                    synchronized (set) {
+                        Set set2 = httpProxyServer2.activeSockets;
+                        Intrinsics.checkNotNullExpressionValue(set2, "access$getActiveSockets$p(...)");
+                        Iterable snap = CollectionsKt.toList(set2);
+                        httpProxyServer2.activeSockets.clear();
+                        Iterable $this$forEach$iv = snap;
+                        for (Object element$iv : $this$forEach$iv) {
+                            Socket it = (Socket) element$iv;
+                            httpProxyServer2.closeQuietly(it);
+                        }
+                        Unit unit2 = Unit.INSTANCE;
+                    }
+                    HttpProxyServer.this.runningConfig = null;
+                    HttpProxyServer.this.activeConnections.set(0);
+                    HttpProxyServer.this._status.setValue(new ProxyStatus(false, null, 0, 0, null, 30, null));
+                    HttpProxyServer.this.getLog().log("Proxy stopped");
+                    return Unit.INSTANCE;
+                default:
+                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+            }
+        }
+    }
+
+    public final Object stop(Continuation<? super Unit> continuation) throws Throwable {
+        Object objWithContext = BuildersKt.withContext(Dispatchers.getIO(), new C09542(null), continuation);
+        return objWithContext == IntrinsicsKt.getCOROUTINE_SUSPENDED() ? objWithContext : Unit.INSTANCE;
+    }
+
+    public final boolean isRunning() {
+        ServerSocket serverSocket = this.serverSocket;
+        return (serverSocket == null || serverSocket.isClosed()) ? false : true;
+    }
+
+    /* JADX INFO: Access modifiers changed from: private */
+    public final void closeQuietly(Socket s) {
+        Unit unit;
+        try {
+            Result.Companion companion = Result.INSTANCE;
+            HttpProxyServer httpProxyServer = this;
+            if (s != null) {
+                s.close();
+                unit = Unit.INSTANCE;
+            } else {
+                unit = null;
+            }
+            Result.m255constructorimpl(unit);
+        } catch (Throwable th) {
+            Result.Companion companion2 = Result.INSTANCE;
+            Result.m255constructorimpl(ResultKt.createFailure(th));
+        }
+    }
+}
+
+===== apk-analysis/decompiled/sources/com/ninjatech/minecraftlanbridge/config/BridgeConfig.java =====
+package com.ninjatech.minecraftlanbridge.config;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import kotlin.Metadata;
+import kotlin.jvm.internal.Intrinsics;
+import kotlin.text.StringsKt;
+
+/* compiled from: BridgeConfig.kt */
+@Metadata(m145d1 = {"\u00002\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0010\b\n\u0002\b\u0006\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0010\u000e\n\u0002\b\u000e\n\u0002\u0010\u0002\n\u0002\b\u0004\u0018\u0000 #2\u00020\u0001:\u0001#B\r\u0012\u0006\u0010\u0002\u001a\u00020\u0003¢\u0006\u0002\u0010\u0004J9\u0010\u001f\u001a\u00020 2\u0006\u0010!\u001a\u00020\u00112\b\u0010\u0017\u001a\u0004\u0018\u00010\u00062\u0006\u0010\u0007\u001a\u00020\u00062\b\b\u0002\u0010\u000e\u001a\u00020\u00062\b\b\u0002\u0010\u001c\u001a\u00020\u0006¢\u0006\u0002\u0010\"R$\u0010\u0007\u001a\u00020\u00062\u0006\u0010\u0005\u001a\u00020\u00068F@FX\u0086\u000e¢\u0006\f\u001a\u0004\b\b\u0010\t\"\u0004\b\n\u0010\u000bR\u000e\u0010\f\u001a\u00020\rX\u0082\u0004¢\u0006\u0002\n\u0000R$\u0010\u000e\u001a\u00020\u00062\u0006\u0010\u0005\u001a\u00020\u00068F@FX\u0086\u000e¢\u0006\f\u001a\u0004\b\u000f\u0010\t\"\u0004\b\u0010\u0010\u000bR$\u0010\u0012\u001a\u00020\u00112\u0006\u0010\u0005\u001a\u00020\u00118F@FX\u0086\u000e¢\u0006\f\u001a\u0004\b\u0013\u0010\u0014\"\u0004\b\u0015\u0010\u0016R(\u0010\u0017\u001a\u0004\u0018\u00010\u00062\b\u0010\u0005\u001a\u0004\u0018\u00010\u00068F@FX\u0086\u000e¢\u0006\f\u001a\u0004\b\u0018\u0010\u0019\"\u0004\b\u001a\u0010\u001bR$\u0010\u001c\u001a\u00020\u00062\u0006\u0010\u0005\u001a\u00020\u00068F@FX\u0086\u000e¢\u0006\f\u001a\u0004\b\u001d\u0010\t\"\u0004\b\u001e\u0010\u000b¨\u0006$"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/config/BridgeConfig;", "", "context", "Landroid/content/Context;", "(Landroid/content/Context;)V", "value", "", "localPort", "getLocalPort", "()I", "setLocalPort", "(I)V", "prefs", "Landroid/content/SharedPreferences;", "proxyPort", "getProxyPort", "setProxyPort", "", "remoteHost", "getRemoteHost", "()Ljava/lang/String;", "setRemoteHost", "(Ljava/lang/String;)V", "remotePort", "getRemotePort", "()Ljava/lang/Integer;", "setRemotePort", "(Ljava/lang/Integer;)V", "udpRelayPort", "getUdpRelayPort", "setUdpRelayPort", "save", "", "host", "(Ljava/lang/String;Ljava/lang/Integer;III)V", "Companion", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+/* loaded from: classes4.dex */
+public final class BridgeConfig {
+    public static final int DEFAULT_LOCAL_PORT = 25565;
+    public static final int DEFAULT_PROXY_PORT = 25580;
+    public static final String DEFAULT_REMOTE_HOST = "play.example.com";
+    public static final int DEFAULT_UDP_RELAY_PORT = 25581;
+    private static final String KEY_LOCAL_PORT = "local_port";
+    private static final String KEY_MIGRATED_V2 = "migrated_v2_optional_port";
+    private static final String KEY_PROXY_PORT = "proxy_port";
+    private static final String KEY_REMOTE_HOST = "remote_host";
+    private static final String KEY_REMOTE_PORT = "remote_port";
+    private static final String KEY_UDP_RELAY_PORT = "udp_relay_port";
+    private static final int PORT_UNSET = -1;
+    private static final String PREFS_NAME = "minecraft_lan_bridge_config";
+    private final SharedPreferences prefs;
+
+    public BridgeConfig(Context context) {
+        Intrinsics.checkNotNullParameter(context, "context");
+        SharedPreferences sharedPreferences = context.getApplicationContext().getSharedPreferences(PREFS_NAME, 0);
+        Intrinsics.checkNotNullExpressionValue(sharedPreferences, "getSharedPreferences(...)");
+        this.prefs = sharedPreferences;
+        if (this.prefs.getBoolean(KEY_MIGRATED_V2, false)) {
+            return;
+        }
+        int oldPort = this.prefs.getInt("remote_port", -1);
+        if (oldPort == 25565) {
+            this.prefs.edit().putInt("remote_port", -1).apply();
+        }
+        this.prefs.edit().putBoolean(KEY_MIGRATED_V2, true).apply();
+    }
+
+    public final String getRemoteHost() {
+        String string = this.prefs.getString("remote_host", DEFAULT_REMOTE_HOST);
+        return string == null ? DEFAULT_REMOTE_HOST : string;
+    }
+
+    public final void setRemoteHost(String value) {
+        Intrinsics.checkNotNullParameter(value, "value");
+        this.prefs.edit().putString("remote_host", StringsKt.trim((CharSequence) value).toString()).apply();
+    }
+
+    public final Integer getRemotePort() {
+        int v = this.prefs.getInt("remote_port", -1);
+        if (v == -1) {
+            return null;
+        }
+        return Integer.valueOf(v);
+    }
+
+    public final void setRemotePort(Integer value) {
+        this.prefs.edit().putInt("remote_port", value != null ? value.intValue() : -1).apply();
+    }
+
+    public final int getLocalPort() {
+        return this.prefs.getInt("local_port", 25565);
+    }
+
+    public final void setLocalPort(int value) {
+        this.prefs.edit().putInt("local_port", value).apply();
+    }
+
+    public final int getProxyPort() {
+        return this.prefs.getInt("proxy_port", DEFAULT_PROXY_PORT);
+    }
+
+    public final void setProxyPort(int value) {
+        this.prefs.edit().putInt("proxy_port", value).apply();
+    }
+
+    public final int getUdpRelayPort() {
+        return this.prefs.getInt("udp_relay_port", DEFAULT_UDP_RELAY_PORT);
+    }
+
+    public final void setUdpRelayPort(int value) {
+        this.prefs.edit().putInt("udp_relay_port", value).apply();
+    }
+
+    public static /* synthetic */ void save$default(BridgeConfig bridgeConfig, String str, Integer num, int i, int i2, int i3, int i4, Object obj) {
+        int proxyPort;
+        int udpRelayPort;
+        if ((i4 & 8) == 0) {
+            proxyPort = i2;
+        } else {
+            proxyPort = bridgeConfig.getProxyPort();
+        }
+        if ((i4 & 16) == 0) {
+            udpRelayPort = i3;
+        } else {
+            udpRelayPort = bridgeConfig.getUdpRelayPort();
+        }
+        bridgeConfig.save(str, num, i, proxyPort, udpRelayPort);
+    }
+
+    public final void save(String host, Integer remotePort, int localPort, int proxyPort, int udpRelayPort) {
+        Intrinsics.checkNotNullParameter(host, "host");
+        this.prefs.edit().putString("remote_host", StringsKt.trim((CharSequence) host).toString()).putInt("remote_port", remotePort != null ? remotePort.intValue() : -1).putInt("local_port", localPort).putInt("proxy_port", proxyPort).putInt("udp_relay_port", udpRelayPort).apply();
+    }
+}
+
