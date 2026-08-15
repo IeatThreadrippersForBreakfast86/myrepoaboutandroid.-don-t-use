@@ -1,0 +1,588 @@
+1-package com.ninjatech.minecraftlanbridge.service;
+2-
+3-import android.app.Notification;
+4-import android.app.NotificationChannel;
+5-import android.app.NotificationManager;
+6-import android.app.PendingIntent;
+7-import android.app.Service;
+8-import android.content.Context;
+9-import android.content.Intent;
+10-import android.os.Build;
+11-import android.os.IBinder;
+12-import androidx.core.app.NotificationCompat;
+13-import com.ninjatech.minecraftlanbridge.C0948R;
+14-import com.ninjatech.minecraftlanbridge.config.BridgeConfig;
+15-import com.ninjatech.minecraftlanbridge.p001ui.MainActivity;
+16-import com.ninjatech.minecraftlanbridge.relay.BridgeState;
+17-import com.ninjatech.minecraftlanbridge.relay.BridgeStatus;
+18:import com.ninjatech.minecraftlanbridge.relay.HttpProxyServer;
+19-import com.ninjatech.minecraftlanbridge.relay.RelayStartException;
+20-import com.ninjatech.minecraftlanbridge.relay.TcpRelayEngine;
+21-import com.ninjatech.minecraftlanbridge.relay.UdpRelayEngine;
+22-import com.ninjatech.minecraftlanbridge.util.NetworkUtils;
+23-import java.util.concurrent.CancellationException;
+24-import kotlin.Metadata;
+25-import kotlin.ResultKt;
+26-import kotlin.Unit;
+27-import kotlin.coroutines.Continuation;
+28-import kotlin.coroutines.intrinsics.IntrinsicsKt;
+29-import kotlin.coroutines.jvm.internal.DebugMetadata;
+30-import kotlin.coroutines.jvm.internal.SuspendLambda;
+31-import kotlin.jvm.functions.Function2;
+32-import kotlin.jvm.internal.DefaultConstructorMarker;
+33-import kotlin.jvm.internal.Intrinsics;
+34-import kotlinx.coroutines.BuildersKt__Builders_commonKt;
+35-import kotlinx.coroutines.CoroutineScope;
+36-import kotlinx.coroutines.CoroutineScopeKt;
+37-import kotlinx.coroutines.Dispatchers;
+38-import kotlinx.coroutines.Job;
+39-import kotlinx.coroutines.SupervisorKt;
+40-import kotlinx.coroutines.flow.FlowKt;
+41-import org.xbill.DNS.Type;
+42-import org.xbill.DNS.WKSRecord;
+43-
+44-/* compiled from: BridgeService.kt */
+45:@Metadata(m145d1 = {"\u0000X\n\u0002\u0018\u0002\n\u0002\u0018\u0002\n\u0002\b\u0002\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0010\u0002\n\u0000\n\u0002\u0010\u000e\n\u0000\n\u0002\u0018\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\u0003\n\u0002\u0010\b\n\u0002\b\u000e\u0018\u0000 )2\u00020\u0001:\u0001)B\u0005¢\u0006\u0002\u0010\u0002J\u0010\u0010\r\u001a\u00020\u000e2\u0006\u0010\u000f\u001a\u00020\u0010H\u0002J\b\u0010\u0011\u001a\u00020\u0012H\u0002J\u0010\u0010\u0013\u001a\u00020\u00142\u0006\u0010\u0003\u001a\u00020\u0004H\u0002J\u0014\u0010\u0015\u001a\u0004\u0018\u00010\u00162\b\u0010\u0017\u001a\u0004\u0018\u00010\u0018H\u0016J\b\u0010\u0019\u001a\u00020\u0012H\u0016J\b\u0010\u001a\u001a\u00020\u0012H\u0016J\"\u0010\u001b\u001a\u00020\u001c2\b\u0010\u0017\u001a\u0004\u0018\u00010\u00182\u0006\u0010\u001d\u001a\u00020\u001c2\u0006\u0010\u001e\u001a\u00020\u001cH\u0016J7\u0010\u001f\u001a\u00020\u00122\u0006\u0010 \u001a\u00020\u00142\b\u0010!\u001a\u0004\u0018\u00010\u001c2\u0006\u0010\"\u001a\u00020\u001c2\u0006\u0010#\u001a\u00020\u001c2\u0006\u0010$\u001a\u00020\u001cH\u0002¢\u0006\u0002\u0010%J\u0010\u0010&\u001a\u00020\u00122\u0006\u0010\u000f\u001a\u00020\u0010H\u0002J\b\u0010'\u001a\u00020\u0012H\u0002J\u0010\u0010(\u001a\u00020\u00122\u0006\u0010\u000f\u001a\u00020\u0010H\u0002R\u000e\u0010\u0003\u001a\u00020\u0004X\u0082\u0004¢\u0006\u0002\n\u0000R\u000e\u0010\u0005\u001a\u00020\u0006X\u0082\u0004¢\u0006\u0002\n\u0000R\u000e\u0010\u0007\u001a\u00020\bX\u0082\u0004¢\u0006\u0002\n\u0000R\u0010\u0010\t\u001a\u0004\u0018\u00010\nX\u0082\u000e¢\u0006\u0002\n\u0000R\u000e\u0010\u000b\u001a\u00020\fX\u0082\u0004¢\u0006\u0002\n\u0000¨\u0006*"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/service/BridgeService;", "Landroid/app/Service;", "()V", "engine", "Lcom/ninjatech/minecraftlanbridge/relay/TcpRelayEngine;", "proxy", "Lcom/ninjatech/minecraftlanbridge/relay/HttpProxyServer;", "serviceScope", "Lkotlinx/coroutines/CoroutineScope;", "statusCollectorJob", "Lkotlinx/coroutines/Job;", "udpRelay", "Lcom/ninjatech/minecraftlanbridge/relay/UdpRelayEngine;", "buildNotification", "Landroid/app/Notification;", NotificationCompat.CATEGORY_STATUS, "Lcom/ninjatech/minecraftlanbridge/relay/BridgeStatus;", "createNotificationChannel", "", "lanHost", "", "onBind", "Landroid/os/IBinder;", "intent", "Landroid/content/Intent;", "onCreate", "onDestroy", "onStartCommand", "", "flags", "startId", "startBridge", "host", "remotePort", "localPort", "proxyPort", "udpRelayPort", "(Ljava/lang/String;Ljava/lang/Integer;III)V", "startInForeground", "stopBridge", "updateNotification", "Companion", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+46-/* loaded from: classes4.dex */
+47-public final class BridgeService extends Service {
+48-    public static final String ACTION_START = "com.ninjatech.minecraftlanbridge.START";
+49-    public static final String ACTION_STOP = "com.ninjatech.minecraftlanbridge.STOP";
+50-    public static final String ACTION_STOP_FROM_NOTIF = "com.ninjatech.minecraftlanbridge.STOP_NOTIF";
+51-    private static final String CHANNEL_ID = "bridge_service_channel";
+52-
+53-    /* renamed from: Companion, reason: from kotlin metadata */
+54-    public static final Companion INSTANCE = new Companion(null);
+55-    public static final String EXTRA_LOCAL_PORT = "local_port";
+56-    public static final String EXTRA_PROXY_PORT = "proxy_port";
+57-    public static final String EXTRA_REMOTE_HOST = "remote_host";
+58-    public static final String EXTRA_REMOTE_PORT = "remote_port";
+59-    public static final String EXTRA_UDP_RELAY_PORT = "udp_relay_port";
+60-    public static final int NOTIF_ID = 4242;
+61-    private Job statusCollectorJob;
+62-    private final TcpRelayEngine engine = TcpRelayEngine.INSTANCE.getShared();
+63:    private final HttpProxyServer proxy = HttpProxyServer.INSTANCE.getShared();
+64-    private final UdpRelayEngine udpRelay = UdpRelayEngine.INSTANCE.getShared();
+65-    private final CoroutineScope serviceScope = CoroutineScopeKt.CoroutineScope(SupervisorKt.SupervisorJob$default((Job) null, 1, (Object) null).plus(Dispatchers.getMain().getImmediate()));
+66-
+67-    @Override // android.app.Service
+68-    public IBinder onBind(Intent intent) {
+69-        return null;
+70-    }
+71-
+72-    @Override // android.app.Service
+73-    public void onCreate() {
+74-        super.onCreate();
+75-        createNotificationChannel();
+76-        this.statusCollectorJob = BuildersKt__Builders_commonKt.launch$default(this.serviceScope, null, null, new C09671(null), 3, null);
+77-    }
+78-
+79-    /* compiled from: BridgeService.kt */
+80-    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+81-    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$onCreate$1", m162f = "BridgeService.kt", m163i = {}, m164l = {Type.CDS}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+82-    /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$onCreate$1 */
+83-    static final class C09671 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+84-        int label;
+85-
+86-        C09671(Continuation<? super C09671> continuation) {
+87-            super(2, continuation);
+88-        }
+89-
+90-        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+91-        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+92-            return BridgeService.this.new C09671(continuation);
+93-        }
+94-
+95-        @Override // kotlin.jvm.functions.Function2
+96-        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+97-            return ((C09671) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+98-        }
+99-
+100-        /* compiled from: BridgeService.kt */
+101-        @Metadata(m145d1 = {"\u0000\f\n\u0000\n\u0002\u0010\u0002\n\u0000\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u00012\u0006\u0010\u0002\u001a\u00020\u0003H\u008a@"}, m146d2 = {"<anonymous>", "", "it", "Lcom/ninjatech/minecraftlanbridge/relay/BridgeStatus;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+102-        @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$onCreate$1$1", m162f = "BridgeService.kt", m163i = {}, m164l = {}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+103-        /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$onCreate$1$1, reason: invalid class name */
+104-        static final class AnonymousClass1 extends SuspendLambda implements Function2<BridgeStatus, Continuation<? super Unit>, Object> {
+105-            /* synthetic */ Object L$0;
+106-            int label;
+107-            final /* synthetic */ BridgeService this$0;
+108-
+109-            /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+110-            AnonymousClass1(BridgeService bridgeService, Continuation<? super AnonymousClass1> continuation) {
+111-                super(2, continuation);
+112-                this.this$0 = bridgeService;
+113-            }
+114-
+115-            @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+116-            public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+117-                AnonymousClass1 anonymousClass1 = new AnonymousClass1(this.this$0, continuation);
+118-                anonymousClass1.L$0 = obj;
+119-                return anonymousClass1;
+120-            }
+121-
+122-            @Override // kotlin.jvm.functions.Function2
+123-            public final Object invoke(BridgeStatus bridgeStatus, Continuation<? super Unit> continuation) {
+124-                return ((AnonymousClass1) create(bridgeStatus, continuation)).invokeSuspend(Unit.INSTANCE);
+125-            }
+126-
+127-            @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+128-            public final Object invokeSuspend(Object obj) {
+129-                IntrinsicsKt.getCOROUTINE_SUSPENDED();
+130-                switch (this.label) {
+131-                    case 0:
+132-                        ResultKt.throwOnFailure(obj);
+133-                        BridgeStatus it = (BridgeStatus) this.L$0;
+134-                        this.this$0.updateNotification(it);
+135-                        return Unit.INSTANCE;
+136-                    default:
+137-                        throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+138-                }
+139-            }
+140-        }
+141-
+142-        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+143-        public final Object invokeSuspend(Object $result) {
+144-            Object coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+145-            switch (this.label) {
+146-                case 0:
+147-                    ResultKt.throwOnFailure($result);
+148-                    this.label = 1;
+149-                    if (FlowKt.collectLatest(BridgeService.this.engine.getStatus(), new AnonymousClass1(BridgeService.this, null), this) != coroutine_suspended) {
+150-                        break;
+151-                    } else {
+152-                        return coroutine_suspended;
+153-                    }
+154-                case 1:
+155-                    ResultKt.throwOnFailure($result);
+156-                    break;
+157-                default:
+158-                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+159-            }
+160-            return Unit.INSTANCE;
+161-        }
+162-    }
+163-
+164-    @Override // android.app.Service
+165-    public int onStartCommand(Intent intent, int flags, int startId) {
+166-        String action = intent != null ? intent.getAction() : null;
+167-        if (action != null) {
+168-            switch (action.hashCode()) {
+169-                case -1412188668:
+170-                    if (action.equals(ACTION_START)) {
+171-                        String host = intent.getStringExtra(EXTRA_REMOTE_HOST);
+172-                        if (host == null) {
+173-                            return 2;
+174-                        }
+175-                        int remotePortRaw = intent.getIntExtra(EXTRA_REMOTE_PORT, -1);
+176-                        Integer remotePort = remotePortRaw != -1 ? Integer.valueOf(remotePortRaw) : null;
+177-                        int localPort = intent.getIntExtra(EXTRA_LOCAL_PORT, -1);
+178:                        int proxyPort = intent.getIntExtra(EXTRA_PROXY_PORT, -1);
+179:                        int udpRelayPort = intent.getIntExtra(EXTRA_UDP_RELAY_PORT, -2);
+180:                        startBridge(host, remotePort, localPort, proxyPort, udpRelayPort);
+181-                        return 1;
+182-                    }
+183-                    return 1;
+184-                case -1264906223:
+185-                    if (!action.equals(ACTION_STOP_FROM_NOTIF)) {
+186-                        return 1;
+187-                    }
+188-                    break;
+189-                case -184101376:
+190-                    if (!action.equals(ACTION_STOP)) {
+191-                        return 1;
+192-                    }
+193-                    break;
+194-                default:
+195-                    return 1;
+196-            }
+197-            stopBridge();
+198-            return 1;
+199-        }
+200-        return 1;
+201-    }
+202-
+203:    private final void startBridge(String host, Integer remotePort, int localPort, int proxyPort, int udpRelayPort) {
+204-        startInForeground(this.engine.getStatus().getValue());
+205:        BuildersKt__Builders_commonKt.launch$default(this.serviceScope, null, null, new C09691(host, remotePort, localPort, this, proxyPort, udpRelayPort, null), 3, null);
+206-    }
+207-
+208-    /* compiled from: BridgeService.kt */
+209-    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+210:    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1", m162f = "BridgeService.kt", m163i = {1}, m164l = {99, 112, WKSRecord.Service.NETBIOS_SSN}, m165m = "invokeSuspend", m166n = {"lanIp"}, m167s = {"L$0"})
+211:    /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1 */
+212-    static final class C09691 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+213-        final /* synthetic */ String $host;
+214-        final /* synthetic */ int $localPort;
+215:        final /* synthetic */ int $proxyPort;
+216-        final /* synthetic */ Integer $remotePort;
+217:        final /* synthetic */ int $udpRelayPort;
+218-        Object L$0;
+219-        int label;
+220-        final /* synthetic */ BridgeService this$0;
+221-
+222-        /* JADX WARN: 'super' call moved to the top of the method (can break code semantics) */
+223-        C09691(String str, Integer num, int i, BridgeService bridgeService, int i2, int i3, Continuation<? super C09691> continuation) {
+224-            super(2, continuation);
+225-            this.$host = str;
+226-            this.$remotePort = num;
+227-            this.$localPort = i;
+228-            this.this$0 = bridgeService;
+229:            this.$proxyPort = i2;
+230:            this.$udpRelayPort = i3;
+231-        }
+232-
+233-        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+234-        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+235:            return new C09691(this.$host, this.$remotePort, this.$localPort, this.this$0, this.$proxyPort, this.$udpRelayPort, continuation);
+236-        }
+237-
+238-        @Override // kotlin.jvm.functions.Function2
+239-        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+240-            return ((C09691) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+241-        }
+242-
+243-        /* JADX WARN: Multi-variable type inference failed */
+244-        /* JADX WARN: Not initialized variable reg: 6, insn: 0x00f3: IGET (r9 I:com.ninjatech.minecraftlanbridge.service.BridgeService) = 
+245:          (r6 I:com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1 A[D('this' com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1)])
+246:         A[Catch: Exception -> 0x0041, RelayStartException -> 0x0044, TRY_ENTER] (LINE:127) com.ninjatech.minecraftlanbridge.service.BridgeService.startBridge.1.this$0 com.ninjatech.minecraftlanbridge.service.BridgeService, block:B:47:0x00f3 */
+247-        /* JADX WARN: Not initialized variable reg: 6, insn: 0x0118: IGET (r9 I:com.ninjatech.minecraftlanbridge.service.BridgeService) = 
+248:          (r6 I:com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1 A[D('this' com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1)])
+249:         A[Catch: Exception -> 0x0041, RelayStartException -> 0x0044] (LINE:125) com.ninjatech.minecraftlanbridge.service.BridgeService.startBridge.1.this$0 com.ninjatech.minecraftlanbridge.service.BridgeService, block:B:48:0x0118 */
+250-        /* JADX WARN: Removed duplicated region for block: B:33:0x00a6 A[Catch: Exception -> 0x0033, RelayStartException -> 0x0036, TRY_ENTER, TryCatch #7 {RelayStartException -> 0x0036, Exception -> 0x0033, blocks: (B:14:0x002e, B:33:0x00a6, B:39:0x00bd, B:41:0x00d7, B:43:0x00db), top: B:77:0x000b }] */
+251-        /* JADX WARN: Removed duplicated region for block: B:81:0x0141 A[EXC_TOP_SPLITTER, SYNTHETIC] */
+252-        /* JADX WARN: Type inference failed for: r1v0, types: [java.lang.Object] */
+253-        /* JADX WARN: Type inference failed for: r1v10 */
+254-        /* JADX WARN: Type inference failed for: r1v15 */
+255-        /* JADX WARN: Type inference failed for: r1v20 */
+256-        /* JADX WARN: Type inference failed for: r1v21 */
+257-        /* JADX WARN: Type inference failed for: r1v5 */
+258:        /* JADX WARN: Type inference failed for: r6v2, types: [com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1] */
+259:        /* JADX WARN: Type inference failed for: r6v3, types: [com.ninjatech.minecraftlanbridge.service.BridgeService$startBridge$1] */
+260-        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+261-        /*
+262-            Code decompiled incorrectly, please refer to instructions dump.
+263-        */
+264-        public final Object invokeSuspend(Object obj) throws Throwable {
+265-            ?? r6;
+266-            ?? r62;
+267-            C09691 c09691;
+268-            String localHost;
+269-            Object obj2;
+270-            C09691 c096912;
+271-            C09691 c096913;
+272-            C09691 c096914;
+273-            int i;
+274-            ?? coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+275-            try {
+276-                try {
+277-                    try {
+278-                    } catch (RelayStartException e) {
+279-                        e = e;
+280-                        c09691 = coroutine_suspended;
+281-                        c09691.this$0.engine.getLog().log("Startup failed: " + e.getMessage());
+282-                        c09691.this$0.stopBridge();
+283-                        return Unit.INSTANCE;
+284-                    } catch (Exception e2) {
+285-                        e = e2;
+286-                        c09691 = coroutine_suspended;
+287-                        c09691.this$0.engine.getLog().log("Startup error: " + e.getMessage());
+288-                        c09691.this$0.stopBridge();
+289-                        return Unit.INSTANCE;
+290-                    }
+291-                } catch (RelayStartException e3) {
+292-                    r62.this$0.engine.getLog().log("Auth proxy failed to start: " + e3.getMessage());
+293-                    c09691 = r62;
+294-                } catch (Exception e4) {
+295-                    r6.this$0.engine.getLog().log("Auth proxy error: " + e4.getMessage());
+296-                    c09691 = r6;
+297-                }
+298-            } catch (RelayStartException e5) {
+299-                e = e5;
+300-                c09691.this$0.engine.getLog().log("Startup failed: " + e.getMessage());
+301-                c09691.this$0.stopBridge();
+302-                return Unit.INSTANCE;
+303-            } catch (Exception e6) {
+304-                e = e6;
+305-                c09691.this$0.engine.getLog().log("Startup error: " + e.getMessage());
+306-                c09691.this$0.stopBridge();
+307-                return Unit.INSTANCE;
+308-            }
+309-            switch (this.label) {
+310-                case 0:
+311-                    ResultKt.throwOnFailure(obj);
+312-                    C09691 c096915 = this;
+313-                    obj2 = obj;
+314-                    TcpRelayEngine.RelayConfig relayConfig = new TcpRelayEngine.RelayConfig(c096915.$host, c096915.$remotePort, c096915.$localPort, null);
+315-                    relayConfig.setAppContext(c096915.this$0.getApplicationContext());
+316-                    c096915.label = 1;
+317-                    Object objStart = c096915.this$0.engine.start(relayConfig, c096915);
+318-                    c096914 = c096915;
+319-                    if (objStart == coroutine_suspended) {
+320-                        return coroutine_suspended;
+321-                    }
+322:                    new BridgeConfig(c096914.this$0).save(c096914.$host, c096914.$remotePort, c096914.$localPort, c096914.$proxyPort, c096914.$udpRelayPort);
+323-                    localHost = c096914.this$0.engine.getStatus().getValue().getLocalHost();
+324:                    i = c096914.$proxyPort;
+325-                    c09691 = c096914;
+326-                    if (i > 0) {
+327:                        HttpProxyServer httpProxyServer = c096914.this$0.proxy;
+328-                        String str = localHost;
+329-                        if (str.length() == 0) {
+330-                            str = null;
+331-                        }
+332-                        String str2 = str;
+333:                        int i2 = c096914.$proxyPort;
+334-                        String strLanHost = c096914.this$0.lanHost(c096914.this$0.engine);
+335:                        int i3 = c096914.$proxyPort;
+336-                        int i4 = c096914.$localPort;
+337:                        int i5 = c096914.$udpRelayPort > 0 ? c096914.$udpRelayPort : 0;
+338-                        c096914.L$0 = localHost;
+339-                        c096914.label = 2;
+340:                        Object objStart2 = httpProxyServer.start(new HttpProxyServer.ProxyConfig(str2, i2, new HttpProxyServer.DiscoveryInfo(strLanHost, i3, i4, i5)), c096914);
+341-                        c09691 = c096914;
+342-                        if (objStart2 == coroutine_suspended) {
+343-                            return coroutine_suspended;
+344-                        }
+345-                    }
+346:                    if (c09691.$udpRelayPort > 0) {
+347-                        try {
+348-                            UdpRelayEngine udpRelayEngine = c09691.this$0.udpRelay;
+349-                            String str3 = localHost;
+350-                            if ((str3.length() == 0 ? 1 : null) != null) {
+351-                                str3 = null;
+352-                            }
+353-                            c09691.L$0 = null;
+354-                            c09691.label = 3;
+355:                            if (udpRelayEngine.start(new UdpRelayEngine.UdpRelayConfig((String) str3, c09691.$udpRelayPort), c09691) == coroutine_suspended) {
+356-                                return coroutine_suspended;
+357-                            }
+358-                            c096913 = c09691;
+359-                            obj = obj2;
+360-                        } catch (RelayStartException e7) {
+361-                            e = e7;
+362-                            c096912 = c09691;
+363-                            obj = obj2;
+364-                            c096912.this$0.engine.getLog().log("UDP relay failed to start: " + e.getMessage());
+365-                            coroutine_suspended = c096912;
+366-                            return Unit.INSTANCE;
+367-                        } catch (Exception e8) {
+368-                            e = e8;
+369-                            c096912 = c09691;
+370-                            obj = obj2;
+371-                            c096912.this$0.engine.getLog().log("UDP relay error: " + e.getMessage());
+372-                            coroutine_suspended = c096912;
+373-                            return Unit.INSTANCE;
+374-                        }
+375-                    }
+376-                    return Unit.INSTANCE;
+377-                case 1:
+378-                    c096914 = this;
+379-                    obj2 = obj;
+380-                    ResultKt.throwOnFailure(obj2);
+381:                    new BridgeConfig(c096914.this$0).save(c096914.$host, c096914.$remotePort, c096914.$localPort, c096914.$proxyPort, c096914.$udpRelayPort);
+382-                    localHost = c096914.this$0.engine.getStatus().getValue().getLocalHost();
+383:                    i = c096914.$proxyPort;
+384-                    c09691 = c096914;
+385-                    if (i > 0) {
+386-                    }
+387:                    if (c09691.$udpRelayPort > 0) {
+388-                    }
+389-                    return Unit.INSTANCE;
+390-                case 2:
+391-                    C09691 c096916 = this;
+392-                    obj2 = obj;
+393-                    localHost = (String) c096916.L$0;
+394-                    ResultKt.throwOnFailure(obj2);
+395-                    c09691 = c096916;
+396:                    if (c09691.$udpRelayPort > 0) {
+397-                    }
+398-                    return Unit.INSTANCE;
+399-                case 3:
+400-                    c096912 = this;
+401-                    obj = obj;
+402-                    try {
+403-                        ResultKt.throwOnFailure(obj);
+404-                        c096913 = c096912;
+405-                    } catch (RelayStartException e9) {
+406-                        e = e9;
+407-                        c096912.this$0.engine.getLog().log("UDP relay failed to start: " + e.getMessage());
+408-                        coroutine_suspended = c096912;
+409-                        return Unit.INSTANCE;
+410-                    } catch (Exception e10) {
+411-                        e = e10;
+412-                        c096912.this$0.engine.getLog().log("UDP relay error: " + e.getMessage());
+413-                        coroutine_suspended = c096912;
+414-                        return Unit.INSTANCE;
+415-                    }
+416-                    return Unit.INSTANCE;
+417-                default:
+418-                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+419-            }
+420-        }
+421-    }
+422-
+423-    /* JADX INFO: Access modifiers changed from: private */
+424-    public final String lanHost(TcpRelayEngine engine) {
+425-        String localHost = engine.getStatus().getValue().getLocalHost();
+426-        if (localHost.length() == 0) {
+427-            String bestLanIpv4 = NetworkUtils.INSTANCE.getBestLanIpv4();
+428-            if (bestLanIpv4 == null) {
+429-                bestLanIpv4 = "";
+430-            }
+431-            localHost = bestLanIpv4;
+432-        }
+433-        return localHost;
+434-    }
+435-
+436-    /* compiled from: BridgeService.kt */
+437-    @Metadata(m145d1 = {"\u0000\n\n\u0000\n\u0002\u0010\u0002\n\u0002\u0018\u0002\u0010\u0000\u001a\u00020\u0001*\u00020\u0002H\u008a@"}, m146d2 = {"<anonymous>", "", "Lkotlinx/coroutines/CoroutineScope;"}, m147k = 3, m148mv = {1, 9, 0}, m150xi = 48)
+438-    @DebugMetadata(m161c = "com.ninjatech.minecraftlanbridge.service.BridgeService$stopBridge$1", m162f = "BridgeService.kt", m163i = {}, m164l = {170, 172, 173}, m165m = "invokeSuspend", m166n = {}, m167s = {})
+439-    /* renamed from: com.ninjatech.minecraftlanbridge.service.BridgeService$stopBridge$1 */
+440-    static final class C09701 extends SuspendLambda implements Function2<CoroutineScope, Continuation<? super Unit>, Object> {
+441-        int label;
+442-
+443-        C09701(Continuation<? super C09701> continuation) {
+444-            super(2, continuation);
+445-        }
+446-
+447-        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+448-        public final Continuation<Unit> create(Object obj, Continuation<?> continuation) {
+449-            return BridgeService.this.new C09701(continuation);
+450-        }
+451-
+452-        @Override // kotlin.jvm.functions.Function2
+453-        public final Object invoke(CoroutineScope coroutineScope, Continuation<? super Unit> continuation) {
+454-            return ((C09701) create(coroutineScope, continuation)).invokeSuspend(Unit.INSTANCE);
+455-        }
+456-
+457-        /* JADX WARN: Multi-variable type inference failed */
+458-        /* JADX WARN: Removed duplicated region for block: B:25:0x0073 A[RETURN] */
+459-        /* JADX WARN: Removed duplicated region for block: B:30:0x00ab A[RETURN] */
+460-        /* JADX WARN: Removed duplicated region for block: B:31:0x00ac  */
+461-        /* JADX WARN: Type inference failed for: r1v0, types: [int] */
+462-        /* JADX WARN: Type inference failed for: r1v10 */
+463-        /* JADX WARN: Type inference failed for: r1v11 */
+464-        /* JADX WARN: Type inference failed for: r1v12 */
+465-        /* JADX WARN: Type inference failed for: r1v13 */
+466-        /* JADX WARN: Type inference failed for: r1v14 */
+467-        /* JADX WARN: Type inference failed for: r1v5 */
+468-        @Override // kotlin.coroutines.jvm.internal.BaseContinuationImpl
+469-        /*
+470-            Code decompiled incorrectly, please refer to instructions dump.
+471-        */
+472-        public final Object invokeSuspend(Object obj) throws Throwable {
+473-            Object objStop;
+474-            C09701 c09701;
+475-            Object coroutine_suspended = IntrinsicsKt.getCOROUTINE_SUSPENDED();
+476-            C09701 c097012 = this.label;
+477-            try {
+478-                try {
+479-                } catch (Exception e) {
+480-                    BridgeService.this.engine.getLog().log("Proxy stop error: " + e.getMessage());
+481-                }
+482-            } catch (Exception e2) {
+483-                BridgeService.this.engine.getLog().log("UDP relay stop error: " + e2.getMessage());
+484-            }
+485-            switch (c097012) {
+486-                case 0:
+487-                    ResultKt.throwOnFailure(obj);
+488-                    C09701 c097013 = this;
+489-                    c097013.label = 1;
+490-                    Object objStop2 = BridgeService.this.udpRelay.stop(c097013);
+491-                    c097012 = c097013;
+492-                    if (objStop2 == coroutine_suspended) {
+493-                        return coroutine_suspended;
+494-                    }
+495-                    c097012.label = 2;
+496-                    objStop = BridgeService.this.proxy.stop(c097012);
+497-                    c097012 = c097012;
+498-                    if (objStop == coroutine_suspended) {
+499-                        return coroutine_suspended;
+500-                    }
+501-                    c097012.label = 3;
+502-                    if (BridgeService.this.engine.stop(c097012) == coroutine_suspended) {
+503-                        return coroutine_suspended;
+504-                    }
+505-                    c09701 = c097012;
+506-                    BridgeService.this.stopForeground(1);
+507-                    BridgeService.this.stopSelf();
+508-                    return Unit.INSTANCE;
+509-                case 1:
+510-                    c097012 = this;
+511-                    ResultKt.throwOnFailure(obj);
+512-                    c097012.label = 2;
+513-                    objStop = BridgeService.this.proxy.stop(c097012);
+514-                    c097012 = c097012;
+515-                    if (objStop == coroutine_suspended) {
+516-                    }
+--
+664-                    c09681.label = 3;
+665-                    return BridgeService.this.engine.stop(c09681) == coroutine_suspended ? coroutine_suspended : Unit.INSTANCE;
+666-                case 1:
+667-                    c09681 = this;
+668-                    ResultKt.throwOnFailure(obj);
+669-                    c09681.label = 2;
+670-                    objStop = BridgeService.this.proxy.stop(c09681);
+671-                    c09681 = c09681;
+672-                    if (objStop == coroutine_suspended) {
+673-                    }
+674-                    c09681.label = 3;
+675-                    if (BridgeService.this.engine.stop(c09681) == coroutine_suspended) {
+676-                    }
+677-                    break;
+678-                case 2:
+679-                    c09681 = this;
+680-                    ResultKt.throwOnFailure(obj);
+681-                    c09681.label = 3;
+682-                    if (BridgeService.this.engine.stop(c09681) == coroutine_suspended) {
+683-                    }
+684-                    break;
+685-                case 3:
+686-                    ResultKt.throwOnFailure(obj);
+687-                default:
+688-                    throw new IllegalStateException("call to 'resume' before 'invoke' with coroutine");
+689-            }
+690-        }
+691-    }
+692-
+693-    /* compiled from: BridgeService.kt */
+694:    @Metadata(m145d1 = {"\u0000(\n\u0002\u0018\u0002\n\u0002\u0010\u0000\n\u0002\b\u0002\n\u0002\u0010\u000e\n\u0002\b\t\n\u0002\u0010\b\n\u0000\n\u0002\u0010\u0002\n\u0000\n\u0002\u0018\u0002\n\u0002\b\b\b\u0086\u0003\u0018\u00002\u00020\u0001B\u0007\b\u0002¢\u0006\u0002\u0010\u0002J?\u0010\u000f\u001a\u00020\u00102\u0006\u0010\u0011\u001a\u00020\u00122\u0006\u0010\u0013\u001a\u00020\u00042\b\u0010\u0014\u001a\u0004\u0018\u00010\u000e2\u0006\u0010\u0015\u001a\u00020\u000e2\u0006\u0010\u0016\u001a\u00020\u000e2\b\b\u0002\u0010\u0017\u001a\u00020\u000e¢\u0006\u0002\u0010\u0018J\u000e\u0010\u0019\u001a\u00020\u00102\u0006\u0010\u0011\u001a\u00020\u0012R\u000e\u0010\u0003\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\u0005\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\u0006\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\u0007\u001a\u00020\u0004X\u0082T¢\u0006\u0002\n\u0000R\u000e\u0010\b\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\t\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\n\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\u000b\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\f\u001a\u00020\u0004X\u0086T¢\u0006\u0002\n\u0000R\u000e\u0010\r\u001a\u00020\u000eX\u0086T¢\u0006\u0002\n\u0000¨\u0006\u001a"}, m146d2 = {"Lcom/ninjatech/minecraftlanbridge/service/BridgeService$Companion;", "", "()V", "ACTION_START", "", "ACTION_STOP", "ACTION_STOP_FROM_NOTIF", "CHANNEL_ID", "EXTRA_LOCAL_PORT", "EXTRA_PROXY_PORT", "EXTRA_REMOTE_HOST", "EXTRA_REMOTE_PORT", "EXTRA_UDP_RELAY_PORT", "NOTIF_ID", "", "start", "", "context", "Landroid/content/Context;", "host", "remotePort", "localPort", "proxyPort", "udpRelayPort", "(Landroid/content/Context;Ljava/lang/String;Ljava/lang/Integer;III)V", "stop", "app_debug"}, m147k = 1, m148mv = {1, 9, 0}, m150xi = 48)
+695-    public static final class Companion {
+696-        public /* synthetic */ Companion(DefaultConstructorMarker defaultConstructorMarker) {
+697-            this();
+698-        }
+699-
+700-        private Companion() {
+701-        }
+702-
+703-        public static /* synthetic */ void start$default(Companion companion, Context context, String str, Integer num, int i, int i2, int i3, int i4, Object obj) {
+704-            if ((i4 & 32) != 0) {
+705-                i3 = BridgeConfig.DEFAULT_UDP_RELAY_PORT;
+706-            }
+707-            companion.start(context, str, num, i, i2, i3);
+708-        }
+709-
+710:        public final void start(Context context, String host, Integer remotePort, int localPort, int proxyPort, int udpRelayPort) {
+711-            Intrinsics.checkNotNullParameter(context, "context");
+712-            Intrinsics.checkNotNullParameter(host, "host");
+713-            Intent intent = new Intent(context, (Class<?>) BridgeService.class);
+714-            intent.setAction(BridgeService.ACTION_START);
+715-            intent.putExtra(BridgeService.EXTRA_REMOTE_HOST, host);
+716-            intent.putExtra(BridgeService.EXTRA_REMOTE_PORT, remotePort != null ? remotePort.intValue() : -1);
+717-            intent.putExtra(BridgeService.EXTRA_LOCAL_PORT, localPort);
+718:            intent.putExtra(BridgeService.EXTRA_PROXY_PORT, proxyPort);
+719:            intent.putExtra(BridgeService.EXTRA_UDP_RELAY_PORT, udpRelayPort);
+720-            if (Build.VERSION.SDK_INT >= 26) {
+721-                context.startForegroundService(intent);
+722-            } else {
+723-                context.startService(intent);
+724-            }
+725-        }
+726-
+727-        public final void stop(Context context) {
+728-            Intrinsics.checkNotNullParameter(context, "context");
+729-            Intent intent = new Intent(context, (Class<?>) BridgeService.class);
+730-            intent.setAction(BridgeService.ACTION_STOP);
+731-            context.startService(intent);
+732-        }
+733-    }
+734-}
