@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="@color/status_glow_connecting"/>
+            <size
+                android:height="@dimen/status_dot_glow_size"
+                android:width="@dimen/status_dot_glow_size"/>
+        </shape>
+    </item>
+    <item
+        android:gravity="center"
+        android:height="@dimen/status_dot_size"
+        android:width="@dimen/status_dot_size">
+        <shape android:shape="oval">
+            <solid android:color="@color/neon_amber"/>
+        </shape>
+    </item>
+</layer-list>
