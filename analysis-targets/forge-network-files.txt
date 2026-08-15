@@ -1,0 +1,10 @@
+forge-src/com/ninjatech/lanbridge/client/ClientProxy.java
+forge-src/com/ninjatech/lanbridge/ui/LanBridgeConfigScreen.java
+forge-src/com/ninjatech/lanbridge/mixin/MinecraftMixin.java
+forge-src/com/ninjatech/lanbridge/mixin/HttpClientBuilderMixin.java
+forge-src/com/ninjatech/lanbridge/mixin/DatagramSocketMixin.java
+forge-src/com/ninjatech/lanbridge/config/LanBridgeConfig.java
+forge-src/com/ninjatech/lanbridge/proxy/LanBridgeUdpFramer.java
+forge-src/com/ninjatech/lanbridge/proxy/LanBridgeDiscovery.java
+forge-src/com/ninjatech/lanbridge/proxy/LanBridgeProxyInstaller.java
+forge-src/com/ninjatech/lanbridge/LanBridge.java

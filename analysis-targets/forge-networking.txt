@@ -1,0 +1,2062 @@
+===== forge-src/com/ninjatech/lanbridge/client/ClientProxy.java =====
+package com.ninjatech.lanbridge.client;
+
+import com.ninjatech.lanbridge.LanBridge;
+import com.ninjatech.lanbridge.config.LanBridgeConfig;
+import com.ninjatech.lanbridge.proxy.LanBridgeDiscovery;
+import com.ninjatech.lanbridge.proxy.LanBridgeProxyInstaller;
+import com.ninjatech.lanbridge.ui.LanBridgeConfigScreen;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.api.distmarker.OnlyIn;
+import net.minecraftforge.client.ConfigScreenHandler;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.ModLoadingContext;
+import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
+
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Client-only initialization for the LAN Bridge Forge mod.
+ *
+ * <p>Installs the JVM-wide HTTP proxy that routes Minecraft's auth / session /
+ * profile HTTPS traffic through the Android host device's CONNECT-tunnel proxy over
+ * the existing LAN. This is the Forge equivalent of the Fabric
+ * {@code LanBridgeClientEntrypoint}.</p>
+ *
+ * <p>If a host IP is configured in {@code config/lanbridge.json} it is used
+ * immediately; otherwise, when auto-discovery is enabled, the local subnet is probed
+ * for the Android app's {@code /__lanbridge_info} endpoint. Either way no new IP is
+ * added \u2014 the PC reuses the LAN path that is already there.</p>
+ */
+@OnlyIn(Dist.CLIENT)
+public final class ClientProxy {
+
+    private ClientProxy() {}
+
+    public static void init(IEventBus modBus) {
+        modBus.addListener(ClientProxy::onClientSetup);
+    }
+
+    private static void onClientSetup(final FMLClientSetupEvent event) {
+        LanBridgeConfig cfg = LanBridgeConfig.get();
+
+        // Register our config screen so the Mods list "Config" button opens it.
+        // This is the forum-verified Forge 1.20.x pattern: registerExtensionPoint
+        // on the mod loading context (NOT RegisterConfigScreenEvent, which is not
+        // available in Forge 47.x for 1.20.1).
+        ModLoadingContext.get().registerExtensionPoint(
+                ConfigScreenHandler.ConfigScreenFactory.class,
+                () -> new ConfigScreenHandler.ConfigScreenFactory(
+                        (mc, parentScreen) -> new LanBridgeConfigScreen(parentScreen)));
+
+        if (cfg.hasHost()) {
+            LanBridgeProxyInstaller.install(null);
+            LanBridge.LOGGER.info("[LAN Bridge] Proxy installed from config \u2192 {}:{}",
+                    cfg.getBridgeHostIp(), cfg.getProxyPort());
+            return;
+        }
+
+        if (cfg.isAutoDiscover()) {
+            LanBridge.LOGGER.info("[LAN Bridge] No host configured; starting LAN discovery...");
+            event.enqueueWork(() -> {
+                // Run discovery on a background thread; enqueueWork gives us a safe
+                // point but discovery is network-bound so we keep it off-thread.
+            });
+            Thread t = new Thread(() -> {
+                try {
+                    LanBridgeDiscovery.BridgeInfo info = LanBridgeDiscovery.discover(10, TimeUnit.SECONDS);
+                    if (info != null) {
+                        cfg.setBridgeHostIp(info.lanHost);
+                        cfg.setProxyPort(info.proxyPort);
+                        cfg.setGameRelayPort(info.gameRelayPort);
+                        cfg.setUdpRelayPort(info.udpRelayPort);
+                        cfg.save();
+                        LanBridgeProxyInstaller.install(null);
+                        LanBridge.LOGGER.info("[LAN Bridge] Discovered bridge \u2192 {}:{} (game relay {}, UDP relay {})",
+                                info.lanHost, info.proxyPort, info.gameRelayPort,
+                                info.udpRelayPort > 0 ? info.udpRelayPort : "disabled");
+                    } else {
+                        LanBridge.LOGGER.warn("[LAN Bridge] No bridge found on the LAN. Set bridgeHostIp in config/lanbridge.json.");
+                    }
+                } catch (Exception e) {
+                    LanBridge.LOGGER.error("[LAN Bridge] Discovery failed: {}", e.getMessage());
+                }
+            }, "lanbridge-discovery");
+            t.setDaemon(true);
+            t.start();
+        } else {
+            LanBridge.LOGGER.warn("[LAN Bridge] No host configured and auto-discovery disabled. Set bridgeHostIp in config/lanbridge.json.");
+        }
+    }
+}
+
+===== forge-src/com/ninjatech/lanbridge/ui/LanBridgeConfigScreen.java =====
+package com.ninjatech.lanbridge.ui;
+
+import com.ninjatech.lanbridge.config.LanBridgeConfig;
+import com.ninjatech.lanbridge.proxy.LanBridgeDiscovery;
+import com.ninjatech.lanbridge.proxy.LanBridgeProxyInstaller;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+import net.minecraftforge.client.ConfigScreenHandler;
+
+import java.util.concurrent.TimeUnit;
+
+/**
+ * Forge in-game config screen for the LAN Bridge mod, exposed via Forge's
+ * {@link ConfigScreenHandler} / {@code IConfigScreenFactory} so the Mods list
+ * "Config" button opens it.
+ *
+ * <p>Uses the Mojmap-named Minecraft widgets (the Forge 1.20.1 MDK ships against
+ * Mojmap names). Lets the user set the bridge host IP, proxy port, game relay port,
+ * connect timeout, and toggles for auth-only routing, auto-discovery, and fallback,
+ * plus a "Discover now" button and an "Apply & (re)install" button.</p>
+ */
+public class LanBridgeConfigScreen extends Screen {
+
+    private final Screen parent;
+    private EditBox hostField;
+    private EditBox proxyPortField;
+    private EditBox gameRelayField;
+    private EditBox udpRelayField;
+    private EditBox timeoutField;
+    private Button authOnlyBtn;
+    private Button autoDiscoverBtn;
+    private Button allowFallbackBtn;
+    private Button routeEssentialBtn;
+    private Button discoverBtn;
+    private Button applyBtn;
+    private Button doneBtn;
+    private String statusMsg = "";
+
+    public LanBridgeConfigScreen(Screen parent) {
+        super(Component.literal("LAN Bridge Configuration"));
+        this.parent = parent;
+    }
+
+    @Override
+    protected void init() {
+        LanBridgeConfig cfg = LanBridgeConfig.get();
+        Minecraft mc = Minecraft.getInstance();
+        int cx = this.width / 2;
+        int y = 40;
+
+        hostField = new EditBox(mc.font, cx - 160, y, 320, 20, Component.literal("Host IP"));
+        hostField.setMaxLength(64);
+        hostField.setValue(cfg.getBridgeHostIp());
+        hostField.setHint(Component.literal("e.g. 192.168.1.50"));
+        addWidget(hostField);
+        y += 30;
+
+        proxyPortField = new EditBox(mc.font, cx - 160, y, 320, 20, Component.literal("Proxy port"));
+        proxyPortField.setMaxLength(5);
+        proxyPortField.setValue(Integer.toString(cfg.getProxyPort()));
+        addWidget(proxyPortField);
+        y += 30;
+
+        gameRelayField = new EditBox(mc.font, cx - 160, y, 320, 20, Component.literal("Game relay port"));
+        gameRelayField.setMaxLength(5);
+        gameRelayField.setValue(Integer.toString(cfg.getGameRelayPort()));
+        addWidget(gameRelayField);
+        y += 30;
+
+        udpRelayField = new EditBox(mc.font, cx - 160, y, 320, 20, Component.literal("UDP relay port"));
+        udpRelayField.setMaxLength(5);
+        udpRelayField.setValue(Integer.toString(cfg.getUdpRelayPort()));
+        udpRelayField.setHint(Component.literal("0 = disabled (Essential P2P)"));
+        addWidget(udpRelayField);
+        y += 30;
+
+        timeoutField = new EditBox(mc.font, cx - 160, y, 320, 20, Component.literal("Connect timeout (ms)"));
+        timeoutField.setMaxLength(6);
+        timeoutField.setValue(Integer.toString(cfg.getConnectTimeoutMs()));
+        addWidget(timeoutField);
+        y += 30;
+
+        authOnlyBtn = Button.builder(Component.literal(authOnlyLabel(cfg.isAuthOnly())),
+                b -> { cfg.setAuthOnly(!cfg.isAuthOnly()); b.setMessage(Component.literal(authOnlyLabel(cfg.isAuthOnly()))); })
+                .bounds(cx - 160, y, 320, 20).build();
+        addRenderableWidget(authOnlyBtn);
+        y += 24;
+
+        autoDiscoverBtn = Button.builder(Component.literal("Auto-discover: " + cfg.isAutoDiscover()),
+                b -> { cfg.setAutoDiscover(!cfg.isAutoDiscover()); b.setMessage(Component.literal("Auto-discover: " + cfg.isAutoDiscover())); })
+                .bounds(cx - 160, y, 320, 20).build();
+        addRenderableWidget(autoDiscoverBtn);
+        y += 24;
+
+        allowFallbackBtn = Button.builder(Component.literal("Allow fallback to direct: " + cfg.isAllowFallback()),
+                b -> { cfg.setAllowFallback(!cfg.isAllowFallback()); b.setMessage(Component.literal("Allow fallback to direct: " + cfg.isAllowFallback())); })
+                .bounds(cx - 160, y, 320, 20).build();
+        addRenderableWidget(allowFallbackBtn);
+        y += 24;
+
+        routeEssentialBtn = Button.builder(Component.literal(routeEssentialLabel(cfg.isRouteEssential())),
+                b -> { cfg.setRouteEssential(!cfg.isRouteEssential()); b.setMessage(Component.literal(routeEssentialLabel(cfg.isRouteEssential()))); })
+                .bounds(cx - 160, y, 320, 20).build();
+        addRenderableWidget(routeEssentialBtn);
+        y += 28;
+
+        discoverBtn = Button.builder(Component.literal("Discover now"), b -> runDiscovery())
+                .bounds(cx - 160, y, 150, 20).build();
+        addRenderableWidget(discoverBtn);
+
+        applyBtn = Button.builder(Component.literal("Apply & (re)install"), b -> apply())
+                .bounds(cx + 10, y, 150, 20).build();
+        addRenderableWidget(applyBtn);
+        y += 28;
+
+        doneBtn = Button.builder(Component.literal("Done"), b -> onClose())
+                .bounds(cx - 80, y, 160, 20).build();
+        addRenderableWidget(doneBtn);
+    }
+
+    /** Human-readable label for the auth-only toggle, explaining what each mode does. */
+    private static String authOnlyLabel(boolean authOnly) {
+        return authOnly
+                ? "Route: AUTH hosts only"
+                : "Route: ALL network traffic";
+    }
+
+    /** Human-readable label for the Essential UDP routing toggle. */
+    private static String routeEssentialLabel(boolean routeEssential) {
+        return routeEssential
+                ? "Essential P2P (UDP): ENABLED"
+                : "Essential P2P (UDP): disabled";
+    }
+
+    private void apply() {
+        LanBridgeConfig cfg = LanBridgeConfig.get();
+        cfg.setBridgeHostIp(hostField.getValue());
+        try { cfg.setProxyPort(Integer.parseInt(proxyPortField.getValue().trim())); } catch (Exception e) { cfg.setProxyPort(LanBridgeConfig.DEFAULT_PROXY_PORT); }
+        try { cfg.setGameRelayPort(Integer.parseInt(gameRelayField.getValue().trim())); } catch (Exception e) { cfg.setGameRelayPort(LanBridgeConfig.DEFAULT_GAME_RELAY_PORT); }
+        try { cfg.setUdpRelayPort(Integer.parseInt(udpRelayField.getValue().trim())); } catch (Exception e) { cfg.setUdpRelayPort(LanBridgeConfig.DEFAULT_UDP_RELAY_PORT); }
+        try { cfg.setConnectTimeoutMs(Integer.parseInt(timeoutField.getValue().trim())); } catch (Exception e) { cfg.setConnectTimeoutMs(4000); }
+        cfg.save();
+        if (cfg.hasHost()) {
+            LanBridgeProxyInstaller.install(null);
+            statusMsg = "\u00a7eApplied and installed proxy \u2192 " + cfg.getBridgeHostIp() + ":" + cfg.getProxyPort();
+        } else {
+            LanBridgeProxyInstaller.uninstall();
+            statusMsg = "\u00a7eSaved. Host IP is empty; proxy not installed.";
+        }
+    }
+
+    private void runDiscovery() {
+        statusMsg = "\u00a7eScanning the LAN...";
+        Thread t = new Thread(() -> {
+            try {
+                LanBridgeDiscovery.BridgeInfo info = LanBridgeDiscovery.discover(10, TimeUnit.SECONDS);
+                if (info == null) {
+                    statusMsg = "\u00a7cNo bridge found on the LAN.";
+                    return;
+                }
+                LanBridgeConfig cfg = LanBridgeConfig.get();
+                cfg.setBridgeHostIp(info.lanHost);
+                cfg.setProxyPort(info.proxyPort);
+                cfg.setGameRelayPort(info.gameRelayPort);
+                cfg.setUdpRelayPort(info.udpRelayPort);
+                cfg.save();
+                LanBridgeProxyInstaller.install(null);
+                statusMsg = "\u00a7aFound bridge \u2192 " + info.lanHost + ":" + info.proxyPort;
+                Minecraft.getInstance().execute(() -> {
+                    if (hostField != null) hostField.setValue(info.lanHost);
+                    if (proxyPortField != null) proxyPortField.setValue(Integer.toString(info.proxyPort));
+                    if (gameRelayField != null) gameRelayField.setValue(Integer.toString(info.gameRelayPort));
+                    if (udpRelayField != null) udpRelayField.setValue(Integer.toString(info.udpRelayPort));
+                });
+            } catch (Exception e) {
+                statusMsg = "\u00a7cDiscovery failed: " + e.getMessage();
+            }
+        }, "lanbridge-discovery-ui");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    @Override
+    public void render(GuiGraphics gui, int mouseX, int mouseY, float partialTick) {
+        renderBackground(gui);
+        super.render(gui, mouseX, mouseY, partialTick);
+        gui.drawCenteredString(this.font, this.title, this.width / 2, 16, 0xFFFFFF);
+        hostField.render(gui, mouseX, mouseY, partialTick);
+        proxyPortField.render(gui, mouseX, mouseY, partialTick);
+        gameRelayField.render(gui, mouseX, mouseY, partialTick);
+        udpRelayField.render(gui, mouseX, mouseY, partialTick);
+        timeoutField.render(gui, mouseX, mouseY, partialTick);
+        if (!statusMsg.isEmpty()) {
+            gui.drawCenteredString(this.font, statusMsg, this.width / 2, this.height - 24, 0xFFFFAA00);
+        }
+    }
+
+    @Override
+    public void onClose() {
+        Minecraft.getInstance().setScreen(parent);
+    }
+
+    @Override
+    public boolean shouldCloseOnEsc() {
+        return true;
+    }
+
+    /**
+     * Convenience factory that wraps this screen in Forge's
+     * {@link ConfigScreenHandler.ConfigScreenFactory} record. The mod registers the
+     * config screen via
+     * {@code ModLoadingContext.get().registerExtensionPoint(...)} using a lambda
+     * directly, but this helper is kept for callers that prefer an explicit handle.
+     */
+    public static ConfigScreenHandler.ConfigScreenFactory factory() {
+        return new ConfigScreenHandler.ConfigScreenFactory((mc, parent) -> new LanBridgeConfigScreen(parent));
+    }
+}
+
+===== forge-src/com/ninjatech/lanbridge/mixin/MinecraftMixin.java =====
+package com.ninjatech.lanbridge.mixin;
+
+import com.ninjatech.lanbridge.proxy.LanBridgeProxyInstaller;
+import net.minecraft.client.Minecraft;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.ModifyArg;
+
+import java.net.Proxy;
+
+/**
+ * THE core fix for the &ldquo;authentication servers are currently
+ * unreachable&rdquo; error on Minecraft 1.20.1 (Forge, authlib 4.x).
+ *
+ * <h2>Why this mixin exists</h2>
+ * <p>Authlib&rsquo;s {@code HttpAuthenticationService} stores a single
+ * {@link java.net.Proxy} in a {@code private final} field and uses
+ * {@code URL.openConnection(thatProxy)} for every auth/session/profile HTTPS
+ * request. When you pass an explicit {@code Proxy} to
+ * {@code URL.openConnection(Proxy)} the JVM <strong>does not consult
+ * {@link java.net.ProxySelector} at all</strong> &mdash; so a JVM-wide default
+ * selector has <em>zero effect</em> on Minecraft&rsquo;s auth traffic.</p>
+ *
+ * <p>{@code net.minecraft.client.Minecraft}&apos;s constructor does:</p>
+ * <pre>
+ *   this.proxy = gameConfig.user.proxy;          // Proxy.NO_PROXY by default
+ *   this.authenticationService = new YggdrasilAuthenticationService(this.proxy);
+ *   this.minecraftSessionService = this.authenticationService.createMinecraftSessionService();
+ *   this.userApiService = this.createUserApiService(this.authenticationService, gameConfig);
+ * </pre>
+ * <p>The {@code Proxy} is then baked, {@code final}, into every session/profile
+ * service. The only way to redirect auth traffic through the LAN Bridge proxy is
+ * to swap the {@code Proxy} <em>before</em> the
+ * {@code YggdrasilAuthenticationService} is constructed.</p>
+ *
+ * <h2>How it works</h2>
+ * <p>This mixin uses {@link ModifyArg} to rewrite the {@code Proxy} argument
+ * passed to {@code YggdrasilAuthenticationService}&apos;s constructor inside
+ * {@code Minecraft.&lt;init&gt;}. When a bridge proxy is active, the original
+ * {@code Proxy.NO_PROXY} is replaced with our bridge {@code Proxy}, so the auth
+ * service (and every session/profile service it spawns) carries the bridge proxy
+ * and auth traffic flows through the Android host&rsquo;s CONNECT tunnel over the
+ * LAN.</p>
+ *
+ * <p>If no bridge proxy is active yet the mixin leaves the original argument
+ * untouched and Minecraft behaves as normal. The reflective
+ * {@code LanBridgeProxyInstaller.patchAuthServices()} path handles a host
+ * configured <em>after</em> launch (via the in-game config screen).</p>
+ *
+ * <p>Forge 1.20.1 runs on official (Mojang) mappings, so the runtime class name
+ * is {@code net.minecraft.client.Minecraft} and the constructor descriptor is
+ * {@code (Lnet/minecraft/client/main/GameConfig;)V}. The authlib constructor
+ * target is not remapped (authlib ships under its real names), so the literal
+ * descriptor matches at runtime.</p>
+ */
+@Mixin(Minecraft.class)
+public abstract class MinecraftMixin {
+
+    /**
+     * Rewrite the {@link Proxy} argument passed to
+     * {@code YggdrasilAuthenticationService}&apos;s constructor inside
+     * {@code Minecraft}&apos;s constructor. {@code index = 0} selects the first
+     * (and only) argument, which is the {@code Proxy}.
+     */
+    @ModifyArg(
+            method = "<init>",
+            at = @At(
+                    value = "INVOKE",
+                    target = "Lcom/mojang/authlib/yggdrasil/YggdrasilAuthenticationService;<init>(Ljava/net/Proxy;)V"
+            ),
+            index = 0
+    )
+    private Proxy lanbridge$swapAuthProxy(Proxy original) {
+        try {
+            Proxy bridge = LanBridgeProxyInstaller.getActiveProxy();
+            if (bridge == null) {
+                // Last-second install attempt in case the host became known
+                // between mod construction and Minecraft construction.
+                LanBridgeProxyInstaller.install(null);
+                bridge = LanBridgeProxyInstaller.getActiveProxy();
+            }
+            if (bridge == null) {
+                System.out.println("[LAN Bridge] Minecraft init: no bridge proxy active; auth proxy unchanged (direct).");
+                return original;
+            }
+            System.out.println("[LAN Bridge] Minecraft init: routing auth via bridge " + bridge + " (was " + original + ").");
+            return bridge;
+        } catch (Throwable t) {
+            System.err.println("[LAN Bridge] Minecraft init: could not swap auth proxy: " + t);
+            return original;
+        }
+    }
+}
+
+===== forge-src/com/ninjatech/lanbridge/mixin/HttpClientBuilderMixin.java =====
+package com.ninjatech.lanbridge.mixin;
+
+import com.ninjatech.lanbridge.proxy.LanBridgeProxyInstaller;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.net.ProxySelector;
+import java.net.http.HttpClient;
+
+/**
+ * Forces every {@link java.net.http.HttpClient} that Minecraft / authlib
+ * constructs to use the LAN Bridge proxy when one is active.
+ *
+ * <p>Although a {@code HttpClient} built with the default builder normally inherits
+ * the JVM-default {@link ProxySelector} (which {@link LanBridgeProxyInstaller} has
+ * already replaced), some Minecraft versions build their client with an explicit
+ * {@code .proxy(ProxySelector.getDefault())} call captured at class-init time, or
+ * with {@code ProxySelector.of(...)}. This mixin guarantees that the builder ends up
+ * with our selector regardless of how it was constructed, by setting the proxy on
+ * the builder <em>before</em> {@code build()} runs.</p>
+ *
+ * <p>We target the concrete JDK implementation class
+ * {@code jdk.internal.net.http.HttpClientBuilderImpl} (which implements
+ * {@link HttpClient.Builder}) rather than the interface itself, because the Forge
+ * Mixin annotation processor (0.8.5) does not support injectors in interface mixins.
+ * The implementation class is a normal class with a {@code build()} method, so a
+ * standard HEAD inject works. {@code remap = false} is set because this is a JDK
+ * class, not a Minecraft class.</p>
+ *
+ * <p>If no bridge proxy is active, the mixin does nothing, preserving normal
+ * behaviour.</p>
+ */
+@Mixin(targets = "jdk.internal.net.http.HttpClientBuilderImpl", remap = false)
+public abstract class HttpClientBuilderMixin {
+
+    @Inject(method = "build", at = @At("HEAD"))
+    private void lanbridge$applyProxy(CallbackInfo ci) {
+        if (!LanBridgeProxyInstaller.isInstalled()) {
+            return;
+        }
+        try {
+            ProxySelector selector = ProxySelector.getDefault();
+            if (selector != null) {
+                ((HttpClient.Builder) this).proxy(selector);
+            }
+        } catch (Throwable t) {
+            // Never break the game: if applying the proxy fails, keep going.
+            System.err.println("[LAN Bridge] Could not apply proxy to HttpClient.Builder: " + t.getMessage());
+        }
+    }
+}
+
+===== forge-src/com/ninjatech/lanbridge/mixin/DatagramSocketMixin.java =====
+package com.ninjatech.lanbridge.mixin;
+
+import com.ninjatech.lanbridge.proxy.LanBridgeProxyInstaller;
+import com.ninjatech.lanbridge.proxy.LanBridgeUdpFramer;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.net.DatagramPacket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.lang.reflect.Field;
+
+/**
+ * Redirects outbound UDP datagrams through the LAN Bridge UDP relay and restores
+ * the real source address on inbound datagrams, so that the Essential mod's
+ * custom ICE/QUIC stack (which uses {@link java.net.DatagramSocket} for STUN,
+ * TURN, and P2P game data) works through the bridge over the existing LAN &mdash;
+ * no new IP, no tethering.
+ *
+ * <h2>Outbound ({@code send})</h2>
+ * <p>For each datagram whose destination should be routed through the relay, we:
+ * <ol>
+ *   <li>Build a framed buffer: {@code [LanBridge header][original payload]} where
+ *       the header encodes the real destination (host + port).</li>
+ *   <li>Rewrite the {@link DatagramPacket}'s address to
+ *       {@code (relayLanHost, relayUdpPort)} so the raw socket sends it to the
+ *       Android relay.</li>
+ *   <li>Swap the packet's internal buffer to the framed one (keeping a reference
+ *       to the original so we can restore it after the send completes).</li>
+ * </ol>
+ * The relay strips the header and forwards the payload to the real destination.</p>
+ *
+ * <h2>Inbound ({@code receive})</h2>
+ * <p>After the underlying {@code receive()} returns, we check whether the received
+ * data starts with the LanBridge magic byte. If so, we parse the header to recover
+ * the real source address, strip the header (shifting the payload to the front of
+ * the buffer), and rewrite the packet's address to the real source. This makes the
+ * Essential mod's code see packets as if they came directly from the peer.</p>
+ *
+ * <h2>Reflection on DatagramPacket</h2>
+ * <p>{@link DatagramPacket} exposes its address via {@code getAddress()} /
+ * {@code setAddress()}, and its buffer via {@code getData()} / {@code setData()}.
+ * We use the public API wherever possible and only fall back to reflection for
+ * the internal {@code offset} and {@code length} fields (which have no public
+ * setter for arbitrary values). The reflection is cached in static fields after
+ * the first successful lookup.</p>
+ *
+ * <p>{@code remap = false} because this targets a JDK class, not a Minecraft class.</p>
+ */
+@Mixin(targets = "java.net.DatagramSocket", remap = false)
+public abstract class DatagramSocketMixin {
+
+    @Shadow
+    public abstract void send(DatagramPacket p) throws java.io.IOException;
+
+    @Shadow
+    public abstract void receive(DatagramPacket p) throws java.io.IOException;
+
+    // --- Cached reflective fields for DatagramPacket internals ---
+    private static volatile Field bufField;
+    private static volatile Field offsetField;
+    private static volatile Field lengthField;
+    private static volatile boolean reflectionInitFailed = false;
+
+    /**
+     * Intercept {@code send()}: frame the payload and rewrite the destination to
+     * the relay address when the real destination should be routed.
+     */
+    @Inject(method = "send", at = @At("HEAD"), cancellable = true)
+    private void lanbridge$send(DatagramPacket p, CallbackInfo ci) {
+        InetSocketAddress relayAddr = LanBridgeProxyInstaller.getUdpRelayAddress();
+        if (relayAddr == null) {
+            return; // No relay configured; let the original send proceed.
+        }
+        InetAddress destAddr = p.getAddress();
+        int destPort = p.getPort();
+        if (destAddr == null || destPort <= 0) {
+            return; // Not yet connected; nothing to rewrite.
+        }
+        InetSocketAddress dest = new InetSocketAddress(destAddr, destPort);
+
+        // Don't route traffic that is already going to the relay (avoid loops).
+        if (LanBridgeProxyInstaller.isUdpRelayAddress(destAddr, destPort)) {
+            return;
+        }
+        // Don't route localhost / loopback traffic.
+        if (LanBridgeProxyInstaller.isLocalAddress(destAddr)) {
+            return;
+        }
+        // Only route if the destination should be routed through the relay.
+        if (!LanBridgeProxyInstaller.shouldRouteUdp(dest)) {
+            return;
+        }
+
+        try {
+            // Build the framed payload.
+            byte[] originalData = p.getData();
+            int originalOffset = p.getOffset();
+            int originalLength = p.getLength();
+            byte[] framed = LanBridgeUdpFramer.frame(dest, originalData, originalOffset, originalLength);
+
+            // Save the original buffer reference so we can restore it.
+            byte[] savedBuf = originalData;
+            int savedOffset = originalOffset;
+            int savedLength = originalLength;
+            InetAddress savedAddr = destAddr;
+            int savedPort = destPort;
+
+            // Rewrite the packet to point at the relay with the framed payload.
+            p.setData(framed, 0, framed.length);
+            p.setAddress(relayAddr.getAddress());
+            p.setPort(relayAddr.getPort());
+
+            try {
+                // Perform the actual send to the relay.
+                send(p);
+            } finally {
+                // Restore the packet to its original state so the caller's
+                // reference is not corrupted (some callers reuse the same
+                // DatagramPacket object for multiple sends).
+                p.setData(savedBuf, savedOffset, savedLength);
+                p.setAddress(savedAddr);
+                p.setPort(savedPort);
+            }
+            ci.cancel(); // We already sent; skip the original send().
+        } catch (Throwable t) {
+            // If framing/sending fails, fall through to the original send() so
+            // the mod doesn't break. This is the safe fallback.
+            System.err.println("[LAN Bridge] UDP send interception failed, falling back to direct: " + t.getMessage());
+            // Do NOT cancel; let the original send() run.
+        }
+    }
+
+    /**
+     * Intercept {@code receive()}: after the underlying receive returns, check
+     * for a framed header, strip it, and restore the real source address.
+     *
+     * <p>We inject at TAIL (after the original method body completes) so the
+     * real receive has already populated the packet. Then we post-process it.</p>
+     */
+    @Inject(method = "receive", at = @At("TAIL"))
+    private void lanbridge$receive(DatagramPacket p, CallbackInfo ci) {
+        if (LanBridgeProxyInstaller.getUdpRelayAddress() == null) {
+            return; // No relay configured; nothing to unframe.
+        }
+        try {
+            byte[] data = p.getData();
+            int offset = p.getOffset();
+            int length = p.getLength();
+            if (!LanBridgeUdpFramer.isFramed(data, offset, length)) {
+                return; // Not a framed datagram; leave as-is.
+            }
+            LanBridgeUdpFramer.ParsedHeader parsed = LanBridgeUdpFramer.parse(data, offset, length);
+            if (parsed == null) {
+                return; // Malformed; leave as-is (best-effort).
+            }
+            // Shift the payload to the front of the buffer (in place).
+            int payloadLen = parsed.payloadLength;
+            if (payloadLen <= 0) {
+                // Empty payload after header; set length to 0 but fix address.
+                setPacketLength(p, 0);
+                p.setAddress(parsed.address.getAddress());
+                p.setPort(parsed.address.getPort());
+                return;
+            }
+            // Move the payload bytes to the start of the buffer.
+            System.arraycopy(data, parsed.payloadOffset, data, offset, payloadLen);
+            setPacketLength(p, payloadLen);
+            // Restore the real source address.
+            p.setAddress(parsed.address.getAddress());
+            p.setPort(parsed.address.getPort());
+        } catch (Throwable t) {
+            System.err.println("[LAN Bridge] UDP receive interception failed: " + t.getMessage());
+        }
+    }
+
+    /**
+     * Set the internal {@code length} field of a {@link DatagramPacket} via
+     * reflection (there is no public setter that takes an arbitrary length without
+     * also changing the buffer/offset). The reflective fields are looked up once
+     * and cached.
+     */
+    private static void setPacketLength(DatagramPacket p, int len) {
+        if (reflectionInitFailed) {
+            // Fallback: use setData with the existing buffer + offset + length.
+            p.setData(p.getData(), p.getOffset(), len);
+            return;
+        }
+        try {
+            if (lengthField == null) {
+                initReflection(p);
+            }
+            if (lengthField != null) {
+                lengthField.setInt(p, len);
+            } else {
+                p.setData(p.getData(), p.getOffset(), len);
+            }
+        } catch (Throwable t) {
+            // Reflection failed; fall back to the public API.
+            reflectionInitFailed = true;
+            p.setData(p.getData(), p.getOffset(), len);
+        }
+    }
+
+    /**
+     * Look up and cache the private {@code buf}, {@code offset}, and
+     * {@code length} fields of {@link DatagramPacket}.
+     */
+    private static void initReflection(DatagramPacket sample) {
+        try {
+            Field f;
+            // length
+            f = DatagramPacket.class.getDeclaredField("length");
+            f.setAccessible(true);
+            lengthField = f;
+            // offset (needed by some JDK versions)
+            try {
+                f = DatagramPacket.class.getDeclaredField("offset");
+                f.setAccessible(true);
+                offsetField = f;
+            } catch (NoSuchFieldException ignored) {}
+            // buf (rarely needed but cached for completeness)
+            try {
+                f = DatagramPacket.class.getDeclaredField("buf");
+                f.setAccessible(true);
+                bufField = f;
+            } catch (NoSuchFieldException ignored) {}
+        } catch (Throwable t) {
+            reflectionInitFailed = true;
+        }
+    }
+}
+
+===== forge-src/com/ninjatech/lanbridge/config/LanBridgeConfig.java =====
+package com.ninjatech.lanbridge.config;
+
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * LAN Bridge client configuration.
+ *
+ * <p>The mod reads a tiny JSON file at {@code config/lanbridge.json} containing the
+ * LAN address of the host device (the Android phone running the Minecraft LAN Bridge
+ * app) and the proxy port the app exposes (default 25580). With these two values the
+ * mod routes every Minecraft authentication / session / profile HTTPS request through
+ * the host device's CONNECT-tunnel proxy instead of the PC reaching the internet
+ * directly.</p>
+ *
+ * <p>If {@code bridgeHostIp} is left blank the mod will attempt auto-discovery by
+ * probing the {@code /__lanbridge_info} endpoint on likely host IPs. This keeps the
+ * "no new IP address" guarantee: the PC simply reuses the existing LAN path that the
+ * Android app already provides for the game server.</p>
+ */
+public final class LanBridgeConfig {
+
+    /** Default proxy port exposed by the Android app's HttpProxyServer. */
+    public static final int DEFAULT_PROXY_PORT = 25580;
+
+    /** Default game relay port exposed by the Android app's TcpRelayEngine. */
+    public static final int DEFAULT_GAME_RELAY_PORT = 25565;
+
+    /** Default UDP relay port exposed by the Android app's UdpRelayEngine. */
+    public static final int DEFAULT_UDP_RELAY_PORT = 25581;
+
+    /** Discovery path served by the Android proxy for auto configuration. */
+    public static final String DISCOVERY_PATH = "/__lanbridge_info";
+
+    /** Filename of the config relative to the game run directory. */
+    public static final String CONFIG_RELATIVE_PATH = "config/lanbridge.json";
+
+    private String bridgeHostIp = "";
+    private int proxyPort = DEFAULT_PROXY_PORT;
+    private int gameRelayPort = DEFAULT_GAME_RELAY_PORT;
+    /**
+     * The UDP relay port on the Android host. When &gt; 0, the
+     * {@code DatagramSocketMixin} routes outbound UDP datagrams for Essential mod
+     * P2P traffic (STUN, TURN, QUIC-over-UDP) through the relay. Set to 0 to
+     * disable UDP relaying entirely.
+     */
+    private int udpRelayPort = DEFAULT_UDP_RELAY_PORT;
+    /**
+     * When true, route the Essential mod's UDP P2P traffic (STUN/TURN/QUIC) through
+     * the UDP relay. When false, UDP traffic goes direct (use this if the PC has
+     * direct internet and only needs the TCP/HTTPS bridge for auth). Defaults to
+     * true so that Essential mod's SPS works through the bridge out of the box.
+     */
+    private boolean routeEssential = true;
+    /**
+     * When true, only authentication/session/profile hosts are routed. When false,
+     * ALL HTTPS is routed through the bridge &mdash; which is what you want when the
+     * PC has no direct internet and needs third-party mod traffic (e.g. the
+     * Essential mod&rsquo;s API calls) to also travel over the LAN bridge. Defaults
+     * to false so the bridge acts as the PC&rsquo;s sole internet path.
+     */
+    private boolean authOnly = false;
+    /** When true and bridgeHostIp is blank, probe the LAN for a running bridge. */
+    private boolean autoDiscover = true;
+    /** Milliseconds to wait for a proxied connection before falling back to direct. */
+    private int connectTimeoutMs = 4000;
+    /** When true, allow falling back to a direct (non-proxied) connection if the proxy is unreachable. */
+    private boolean allowFallback = true;
+
+    private static LanBridgeConfig INSTANCE;
+
+    private LanBridgeConfig() {}
+
+    public static synchronized LanBridgeConfig get() {
+        if (INSTANCE == null) {
+            INSTANCE = new LanBridgeConfig();
+            INSTANCE.load();
+        }
+        return INSTANCE;
+    }
+
+    /** Resolve the config file path relative to the current working directory. */
+    private static Path configPath() {
+        return Paths.get(CONFIG_RELATIVE_PATH);
+    }
+
+    /** Load (or create with defaults) the config file. Safe to call repeatedly. */
+    public synchronized void load() {
+        Path path = configPath();
+        if (!Files.exists(path)) {
+            save();
+            return;
+        }
+        try {
+            String json = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+            fromJson(json.trim());
+        } catch (IOException | RuntimeException e) {
+            // Corrupt or unreadable: rewrite defaults so the game can still start.
+            System.err.println("[LAN Bridge] Could not read config, using defaults: " + e.getMessage());
+            save();
+        }
+    }
+
+    /** Persist the current values back to disk in a stable, human-editable order. */
+    public synchronized void save() {
+        Path path = configPath();
+        try {
+            if (path.getParent() != null) {
+                Files.createDirectories(path.getParent());
+            }
+            Files.write(path, toJson().getBytes(StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            System.err.println("[LAN Bridge] Could not write config: " + e.getMessage());
+        }
+    }
+
+    // ----- accessors -----
+
+    public String getBridgeHostIp() { return bridgeHostIp == null ? "" : bridgeHostIp.trim(); }
+
+    public void setBridgeHostIp(String bridgeHostIp) { this.bridgeHostIp = bridgeHostIp == null ? "" : bridgeHostIp.trim(); }
+
+    public int getProxyPort() { return proxyPort; }
+
+    public void setProxyPort(int proxyPort) {
+        if (proxyPort <= 0 || proxyPort > 65535) {
+            this.proxyPort = DEFAULT_PROXY_PORT;
+        } else {
+            this.proxyPort = proxyPort;
+        }
+    }
+
+    public int getGameRelayPort() { return gameRelayPort; }
+
+    public void setGameRelayPort(int gameRelayPort) {
+        if (gameRelayPort <= 0 || gameRelayPort > 65535) {
+            this.gameRelayPort = DEFAULT_GAME_RELAY_PORT;
+        } else {
+            this.gameRelayPort = gameRelayPort;
+        }
+    }
+
+    public int getUdpRelayPort() { return udpRelayPort; }
+
+    public void setUdpRelayPort(int udpRelayPort) {
+        if (udpRelayPort < 0 || udpRelayPort > 65535) {
+            this.udpRelayPort = DEFAULT_UDP_RELAY_PORT;
+        } else {
+            this.udpRelayPort = udpRelayPort;
+        }
+    }
+
+    public boolean isRouteEssential() { return routeEssential; }
+
+    public void setRouteEssential(boolean routeEssential) { this.routeEssential = routeEssential; }
+
+    public boolean isAuthOnly() { return authOnly; }
+
+    public void setAuthOnly(boolean authOnly) { this.authOnly = authOnly; }
+
+    public boolean isAutoDiscover() { return autoDiscover; }
+
+    public void setAutoDiscover(boolean autoDiscover) { this.autoDiscover = autoDiscover; }
+
+    public int getConnectTimeoutMs() { return connectTimeoutMs; }
+
+    public void setConnectTimeoutMs(int connectTimeoutMs) {
+        this.connectTimeoutMs = Math.max(500, connectTimeoutMs);
+    }
+
+    public boolean isAllowFallback() { return allowFallback; }
+
+    public void setAllowFallback(boolean allowFallback) { this.allowFallback = allowFallback; }
+
+    /** True when the config has a usable host IP (non-empty and not a placeholder). */
+    public boolean hasHost() {
+        String h = getBridgeHostIp();
+        return !h.isEmpty() && !h.equalsIgnoreCase("0.0.0.0");
+    }
+
+    // ----- minimal JSON (no external deps) -----
+
+    public String toJson() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("{\n");
+        sb.append("  \"bridgeHostIp\": ").append(quote(bridgeHostIp)).append(",\n");
+        sb.append("  \"proxyPort\": ").append(proxyPort).append(",\n");
+        sb.append("  \"gameRelayPort\": ").append(gameRelayPort).append(",\n");
+        sb.append("  \"udpRelayPort\": ").append(udpRelayPort).append(",\n");
+        sb.append("  \"routeEssential\": ").append(routeEssential).append(",\n");
+        sb.append("  \"authOnly\": ").append(authOnly).append(",\n");
+        sb.append("  \"autoDiscover\": ").append(autoDiscover).append(",\n");
+        sb.append("  \"connectTimeoutMs\": ").append(connectTimeoutMs).append(",\n");
+        sb.append("  \"allowFallback\": ").append(allowFallback).append("\n");
+        sb.append("}\n");
+        return sb.toString();
+    }
+
+    private void fromJson(String json) {
+        // A deliberately tiny hand-rolled parser: the file is small and flat.
+        this.bridgeHostIp = readString(json, "bridgeHostIp", bridgeHostIp);
+        this.proxyPort = readInt(json, "proxyPort", proxyPort);
+        this.gameRelayPort = readInt(json, "gameRelayPort", gameRelayPort);
+        this.udpRelayPort = readInt(json, "udpRelayPort", udpRelayPort);
+        this.routeEssential = readBool(json, "routeEssential", routeEssential);
+        this.authOnly = readBool(json, "authOnly", authOnly);
+        this.autoDiscover = readBool(json, "autoDiscover", autoDiscover);
+        this.connectTimeoutMs = readInt(json, "connectTimeoutMs", connectTimeoutMs);
+        this.allowFallback = readBool(json, "allowFallback", allowFallback);
+    }
+
+    private static String quote(String s) {
+        if (s == null) s = "";
+        StringBuilder b = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"': b.append("\\\""); break;
+                case '\\': b.append("\\\\"); break;
+                case '\n': b.append("\\n"); break;
+                case '\r': b.append("\\r"); break;
+                case '\t': b.append("\\t"); break;
+                default:
+                    if (c < 0x20) {
+                        b.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        b.append(c);
+                    }
+            }
+        }
+        return b.append('"').toString();
+    }
+
+    private static String readString(String json, String key, String def) {
+        String raw = readRaw(json, key);
+        if (raw == null) return def;
+        raw = raw.trim();
+        if (raw.length() >= 2 && raw.startsWith("\"") && raw.endsWith("\"")) {
+            return unescape(raw.substring(1, raw.length() - 1));
+        }
+        return def;
+    }
+
+    private static int readInt(String json, String key, int def) {
+        String raw = readRaw(json, key);
+        if (raw == null) return def;
+        try { return Integer.parseInt(raw.trim()); } catch (NumberFormatException e) { return def; }
+    }
+
+    private static boolean readBool(String json, String key, boolean def) {
+        String raw = readRaw(json, key);
+        if (raw == null) return def;
+        String t = raw.trim();
+        if (t.equalsIgnoreCase("true")) return true;
+        if (t.equalsIgnoreCase("false")) return false;
+        return def;
+    }
+
+    /** Read the raw value token following "key": (handles nested quotes). */
+    private static String readRaw(String json, String key) {
+        String needle = "\"" + key + "\"";
+        int idx = json.indexOf(needle);
+        if (idx < 0) return null;
+        int colon = json.indexOf(':', idx + needle.length());
+        if (colon < 0) return null;
+        int start = colon + 1;
+        // skip whitespace
+        while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
+        if (start >= json.length()) return null;
+        char first = json.charAt(start);
+        if (first == '"') {
+            int end = start + 1;
+            while (end < json.length()) {
+                char c = json.charAt(end);
+                if (c == '\\') { end += 2; continue; }
+                if (c == '"') { end++; break; }
+                end++;
+            }
+            return json.substring(start, Math.min(end, json.length()));
+        } else {
+            int end = start;
+            while (end < json.length()) {
+                char c = json.charAt(end);
+                if (c == ',' || c == '}' || c == '\n' || c == '\r') break;
+                end++;
+            }
+            return json.substring(start, end).trim();
+        }
+    }
+
+    private static String unescape(String s) {
+        StringBuilder b = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c == '\\' && i + 1 < s.length()) {
+                char n = s.charAt(++i);
+                switch (n) {
+                    case '"': b.append('"'); break;
+                    case '\\': b.append('\\'); break;
+                    case '/': b.append('/'); break;
+                    case 'n': b.append('\n'); break;
+                    case 'r': b.append('\r'); break;
+                    case 't': b.append('\t'); break;
+                    default: b.append(n);
+                }
+            } else {
+                b.append(c);
+            }
+        }
+        return b.toString();
+    }
+
+    // Prevent the map import warning; used for ordered documentation in future.
+    @SuppressWarnings("unused")
+    private static Map<String, Object> emptyOrdered() { return new LinkedHashMap<>(); }
+}
+
+===== forge-src/com/ninjatech/lanbridge/proxy/LanBridgeUdpFramer.java =====
+package com.ninjatech.lanbridge.proxy;
+
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+
+/**
+ * Encodes and decodes the in-band binary header used by the LAN Bridge UDP relay.
+ *
+ * <p>The protocol is identical on both sides (Android relay and Forge mod mixin):
+ * <pre>
+ *   Offset  Size    Field
+ *   0       1       Magic byte: 0x4C ('L' for LanBridge)
+ *   1       1       Address type: 0x01 = IPv4 (4 raw bytes), 0x04 = hostname
+ *   2       4       IPv4 address (network byte order)                 [type 0x01]
+ *     or
+ *   2       1       hostname length N                                    [type 0x04]
+ *   3..     N       hostname bytes (ASCII/UTF-8)                        [type 0x04]
+ *   last    2       Port (network byte order, big-endian)
+ *           ...     Original UDP payload
+ * </pre>
+ *
+ * <p>The Forge mod's {@code DatagramSocketMixin} prepends this header to every
+ * outbound datagram destined for a host that should be routed through the relay,
+ * rewriting the datagram's target address to the relay's {@code (lanHost, udpRelayPort)}.
+ * The Android {@code UdpRelayEngine} strips the header, forwards the payload to the
+ * real destination, and &mdash; on return &mdash; prepends a source header so the
+ * mod can restore the real source address.</p>
+ *
+ * <p>This class is thread-safe (all methods are pure / operate on local buffers).</p>
+ */
+public final class LanBridgeUdpFramer {
+
+    private LanBridgeUdpFramer() {}
+
+    /** Magic byte that identifies a LanBridge-framed datagram. */
+    public static final byte MAGIC = 0x4C;
+
+    /** Address type: 4 raw IPv4 bytes follow. */
+    public static final byte ADDR_TYPE_IPV4 = 0x01;
+
+    /** Address type: a 1-byte length + hostname bytes follow. */
+    public static final byte ADDR_TYPE_HOSTNAME = 0x04;
+
+    /**
+     * Result of parsing a framed datagram: the real destination/source address
+     * and the offset where the original UDP payload begins.
+     */
+    public static final class ParsedHeader {
+        public final InetSocketAddress address;
+        public final int payloadOffset;
+        public final int payloadLength;
+
+        ParsedHeader(InetSocketAddress address, int payloadOffset, int payloadLength) {
+            this.address = address;
+            this.payloadOffset = payloadOffset;
+            this.payloadLength = payloadLength;
+        }
+    }
+
+    /**
+     * Build the framed datagram: {@code [header][originalPayload]}.
+     *
+     * @param dest     the real destination address (host + port) that the relay
+     *                 should forward to.
+     * @param payload  the original UDP payload bytes.
+     * @param offset   offset within {@code payload} where the data starts.
+     * @param length   number of bytes of data.
+     * @return a new byte array containing the framed datagram.
+     */
+    public static byte[] frame(InetSocketAddress dest, byte[] payload, int offset, int length) {
+        String host = dest.getHostString();
+        int port = dest.getPort();
+        byte[] header = buildHeader(host, port, dest.getAddress());
+        byte[] out = new byte[header.length + length];
+        System.arraycopy(header, 0, out, 0, header.length);
+        System.arraycopy(payload, offset, out, header.length, length);
+        return out;
+    }
+
+    /**
+     * Build just the header bytes for the given host + port.
+     *
+     * <p>If {@code resolved} is a raw IPv4 address we use the compact 4-byte
+     * encoding (type 0x01). Otherwise we encode the hostname string (type 0x04),
+     * which lets the relay resolve it itself &mdash; important for STUN/TURN
+     * hostnames like {@code na.stun.essential.gg}.</p>
+     */
+    private static byte[] buildHeader(String host, int port, InetAddress resolved) {
+        // Prefer raw IPv4 when we have it (avoids a DNS round-trip on the relay).
+        if (resolved != null && resolved.getAddress().length == 4) {
+            byte[] ip = resolved.getAddress();
+            ByteBuffer buf = ByteBuffer.allocate(1 + 1 + 4 + 2);
+            buf.put(MAGIC);
+            buf.put(ADDR_TYPE_IPV4);
+            buf.put(ip);
+            buf.putShort((short) (port & 0xFFFF));
+            return buf.array();
+        }
+        // Otherwise encode the hostname string.
+        byte[] hostBytes = host.getBytes(StandardCharsets.UTF_8);
+        if (hostBytes.length > 255) {
+            throw new IllegalArgumentException("Hostname too long for UDP relay header: " + host);
+        }
+        ByteBuffer buf = ByteBuffer.allocate(1 + 1 + 1 + hostBytes.length + 2);
+        buf.put(MAGIC);
+        buf.put(ADDR_TYPE_HOSTNAME);
+        buf.put((byte) hostBytes.length);
+        buf.put(hostBytes);
+        buf.putShort((short) (port & 0xFFFF));
+        return buf.array();
+    }
+
+    /**
+     * Parse a framed datagram, extracting the embedded address and locating the
+     * original payload.
+     *
+     * @param data    the received datagram buffer.
+     * @param offset  start offset of the data.
+     * @param length  total length of the data.
+     * @return the parsed header, or {@code null} if the data does not start with
+     *         the magic byte or is too short / malformed.
+     */
+    public static ParsedHeader parse(byte[] data, int offset, int length) {
+        if (length < 4) return null; // magic + type + at least 1 addr byte + 0 port
+        if (data[offset] != MAGIC) return null;
+
+        int pos = offset + 1;
+        byte addrType = data[pos++];
+
+        String host;
+        switch (addrType) {
+            case ADDR_TYPE_IPV4: {
+                if (length < 1 + 1 + 4 + 2) return null;
+                byte[] ip = new byte[4];
+                System.arraycopy(data, pos, ip, 0, 4);
+                pos += 4;
+                try {
+                    host = InetAddress.getByAddress(ip).getHostAddress();
+                } catch (UnknownHostException e) {
+                    return null;
+                }
+                break;
+            }
+            case ADDR_TYPE_HOSTNAME: {
+                int hostLen = data[pos++] & 0xFF;
+                if (length < (pos - offset) + hostLen + 2) return null;
+                host = new String(data, pos, hostLen, StandardCharsets.UTF_8);
+                pos += hostLen;
+                break;
+            }
+            default:
+                return null;
+        }
+
+        if (length < (pos - offset) + 2) return null;
+        int port = ((data[pos] & 0xFF) << 8) | (data[pos + 1] & 0xFF);
+        pos += 2;
+
+        int payloadOffset = pos;
+        int payloadLength = length - (pos - offset);
+        if (payloadLength < 0) return null;
+
+        InetSocketAddress addr = new InetSocketAddress(host, port);
+        return new ParsedHeader(addr, payloadOffset, payloadLength);
+    }
+
+    /**
+     * Quick check: does this buffer start with the LanBridge magic byte?
+     * Used by the mixin's receive() path to decide whether to strip a header.
+     */
+    public static boolean isFramed(byte[] data, int offset, int length) {
+        return length >= 4 && data[offset] == MAGIC;
+    }
+}
+
+===== forge-src/com/ninjatech/lanbridge/proxy/LanBridgeDiscovery.java =====
+package com.ninjatech.lanbridge.proxy;
+
+import com.ninjatech.lanbridge.config.LanBridgeConfig;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.NetworkInterface;
+import java.net.Socket;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Auto-discovers a running Minecraft LAN Bridge host on the local network by
+ * probing the {@code /__lanbridge_info} HTTP endpoint that the Android app's
+ * {@code HttpProxyServer} exposes on its proxy port.
+ *
+ * <p>This is an optional convenience: if the user has already entered the host IP
+ * in {@code config/lanbridge.json} (or via the ModMenu screen) discovery is
+ * skipped. Discovery only ever probes IPs on the same LAN subnet, so it never
+ * creates a new IP address or routes anything off the local network.</p>
+ */
+public final class LanBridgeDiscovery {
+
+    private LanBridgeDiscovery() {}
+
+    public static final class BridgeInfo {
+        public final String lanHost;
+        public final int proxyPort;
+        public final int gameRelayPort;
+        public final int udpRelayPort;
+        public BridgeInfo(String lanHost, int proxyPort, int gameRelayPort, int udpRelayPort) {
+            this.lanHost = lanHost;
+            this.proxyPort = proxyPort;
+            this.gameRelayPort = gameRelayPort;
+            this.udpRelayPort = udpRelayPort;
+        }
+    }
+
+    /** Synchronous discovery with a hard overall deadline. Returns null if nothing found. */
+    public static BridgeInfo discover() {
+        return discover(8, TimeUnit.SECONDS);
+    }
+
+    public static BridgeInfo discover(long timeout, TimeUnit unit) {
+        LanBridgeConfig cfg = LanBridgeConfig.get();
+        int port = cfg.getProxyPort();
+
+        // 1. Try the configured host first (fast path).
+        if (cfg.hasHost()) {
+            BridgeInfo info = probe(cfg.getBridgeHostIp(), port);
+            if (info != null) return info;
+        }
+
+        // 2. Otherwise scan local subnets /24 for any responsive bridge.
+        List<String> candidates = collectCandidateIps();
+        ExecutorService pool = Executors.newFixedThreadPool(Math.min(16, Math.max(2, candidates.size())));
+        AtomicReference<BridgeInfo> winner = new AtomicReference<>();
+        List<Future<?>> futures = new ArrayList<>();
+        try {
+            for (String ip : candidates) {
+                futures.add(pool.submit(() -> {
+                    if (winner.get() != null) return;
+                    BridgeInfo info = probe(ip, port);
+                    if (info != null) winner.compareAndSet(null, info);
+                }));
+            }
+            pool.shutdown();
+            try { pool.awaitTermination(timeout, unit); } catch (InterruptedException ignored) {}
+        } finally {
+            pool.shutdownNow();
+        }
+        return winner.get();
+    }
+
+    /** Probe a single IP:port for the discovery JSON. */
+    private static BridgeInfo probe(String ip, int port) {
+        // Quick TCP reachability check first.
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(ip, port), 600);
+        } catch (Exception e) {
+            return null;
+        }
+        // Fetch the discovery document.
+        HttpURLConnection conn = null;
+        try {
+            URL url = new URL("http://" + ip + ":" + port + LanBridgeConfig.DISCOVERY_PATH);
+            conn = (HttpURLConnection) url.openConnection(java.net.Proxy.NO_PROXY);
+            conn.setConnectTimeout(800);
+            conn.setReadTimeout(800);
+            conn.setRequestMethod("GET");
+            int code = conn.getResponseCode();
+            if (code != 200) return null;
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader r = new BufferedReader(new InputStreamReader(conn.getInputStream()))) {
+                String line;
+                while ((line = r.readLine()) != null) sb.append(line).append('\n');
+            }
+            return parse(sb.toString(), ip, port);
+        } catch (Exception e) {
+            return null;
+        } finally {
+            if (conn != null) conn.disconnect();
+        }
+    }
+
+    /** Parse the tiny discovery JSON without external libraries. */
+    private static BridgeInfo parse(String json, String discoveredIp, int discoveredPort) {
+        if (json == null || json.isEmpty()) return null;
+        String lanHost = readString(json, "lanHost", discoveredIp);
+        int proxyPort = readInt(json, "proxyPort", discoveredPort);
+        int gameRelayPort = readInt(json, "gameRelayPort", LanBridgeConfig.DEFAULT_GAME_RELAY_PORT);
+        int udpRelayPort = readInt(json, "udpRelayPort", LanBridgeConfig.DEFAULT_UDP_RELAY_PORT);
+        if (proxyPort <= 0 || proxyPort > 65535) proxyPort = discoveredPort;
+        if (udpRelayPort < 0 || udpRelayPort > 65535) udpRelayPort = 0; // 0 = disabled
+        return new BridgeInfo(lanHost, proxyPort, gameRelayPort, udpRelayPort);
+    }
+
+    /** Collect candidate LAN IPs from the machine's own interfaces (same /24 subnets). */
+    private static List<String> collectCandidateIps() {
+        List<String> out = new ArrayList<>();
+        try {
+            Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+            while (ifaces.hasMoreElements()) {
+                NetworkInterface nif = ifaces.nextElement();
+                if (!nif.isUp() || nif.isLoopback() || nif.isVirtual()) continue;
+                Enumeration<InetAddress> addrs = nif.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    InetAddress a = addrs.nextElement();
+                    if (a.isLoopbackAddress()) continue;
+                    byte[] bytes = a.getAddress();
+                    if (bytes.length != 4) continue; // IPv4 only for /24 scan
+                    // Enumerate .1 .. .254 on the same /24.
+                    for (int i = 1; i <= 254; i++) {
+                        byte[] candidate = new byte[4];
+                        System.arraycopy(bytes, 0, candidate, 0, 3);
+                        candidate[3] = (byte) i;
+                        // Skip our own address.
+                        if (candidate[0] == bytes[0] && candidate[1] == bytes[1]
+                                && candidate[2] == bytes[2] && candidate[3] == bytes[3]) continue;
+                        out.add(InetAddress.getByAddress(candidate).getHostAddress());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("[LAN Bridge] Discovery enumeration failed: " + e.getMessage());
+        }
+        return out;
+    }
+
+    // ---- tiny JSON readers (same style as LanBridgeConfig) ----
+    private static String readString(String json, String key, String def) {
+        String raw = readRaw(json, key);
+        if (raw == null) return def;
+        raw = raw.trim();
+        if (raw.length() >= 2 && raw.startsWith("\"") && raw.endsWith("\"")) {
+            return raw.substring(1, raw.length() - 1);
+        }
+        return def;
+    }
+    private static int readInt(String json, String key, int def) {
+        String raw = readRaw(json, key);
+        if (raw == null) return def;
+        try { return Integer.parseInt(raw.trim()); } catch (NumberFormatException e) { return def; }
+    }
+    private static String readRaw(String json, String key) {
+        String needle = "\"" + key + "\"";
+        int idx = json.indexOf(needle);
+        if (idx < 0) return null;
+        int colon = json.indexOf(':', idx + needle.length());
+        if (colon < 0) return null;
+        int start = colon + 1;
+        while (start < json.length() && Character.isWhitespace(json.charAt(start))) start++;
+        if (start >= json.length()) return null;
+        char first = json.charAt(start);
+        if (first == '"') {
+            int end = start + 1;
+            while (end < json.length()) {
+                char c = json.charAt(end);
+                if (c == '\\') { end += 2; continue; }
+                if (c == '"') { end++; break; }
+                end++;
+            }
+            return json.substring(start, Math.min(end, json.length()));
+        } else {
+            int end = start;
+            while (end < json.length()) {
+                char c = json.charAt(end);
+                if (c == ',' || c == '}' || c == '\n' || c == '\r') break;
+                end++;
+            }
+            return json.substring(start, end).trim();
+        }
+    }
+}
+
+===== forge-src/com/ninjatech/lanbridge/proxy/LanBridgeProxyInstaller.java =====
+package com.ninjatech.lanbridge.proxy;
+
+import com.ninjatech.lanbridge.config.LanBridgeConfig;
+
+import java.io.IOException;
+import java.lang.reflect.Field;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.net.ProxySelector;
+import java.net.SocketAddress;
+import java.net.URI;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Routes <strong>every</strong> network request the Minecraft client makes through
+ * the Android host device's CONNECT-tunnel proxy over the existing LAN, without
+ * giving the PC a new IP address.
+ *
+ * <h2>Root cause of &ldquo;authentication servers are currently
+ * unreachable&rdquo;</h2>
+ * <p>Authlib (4.x, used by Minecraft 1.20.1 / Forge) does <strong>not</strong> use
+ * {@link java.net.ProxySelector} for auth traffic. Its
+ * {@code HttpAuthenticationService} stores a single {@link Proxy} in a
+ * {@code private final} field and calls {@code URL.openConnection(thatProxy)} for
+ * every request. When you pass an explicit {@code Proxy} to
+ * {@code URL.openConnection(Proxy)} the JVM skips {@code ProxySelector} entirely.
+ * {@code Minecraft}&apos;s constructor (Forge: {@code net.minecraft.client.Minecraft})
+ * does:</p>
+ * <pre>
+ *   this.proxy = gameConfig.user.proxy;          // Proxy.NO_PROXY by default
+ *   this.authenticationService = new YggdrasilAuthenticationService(this.proxy);
+ *   this.minecraftSessionService = this.authenticationService.createMinecraftSessionService();
+ *   this.userApiService = this.createUserApiService(this.authenticationService, gameConfig);
+ * </pre>
+ * <p>so the {@code Proxy} is baked, {@code final}, into every session/profile
+ * service. This is why a {@code ProxySelector}-only approach cannot redirect auth
+ * traffic &mdash; the selector is simply never consulted for those calls.</p>
+ *
+ * <h2>How we actually fix it</h2>
+ * <ol>
+ *   <li><b>At-launch mixin.</b> {@code MinecraftMixin} uses {@code @ModifyArg} to
+ *       rewrite the {@code Proxy} passed to {@code YggdrasilAuthenticationService}
+ *       &apos;s constructor inside {@code Minecraft.&lt;init&gt;}. When a host is
+ *       known at launch (from {@code config/lanbridge.json} or auto-discovery
+ *       completed during early mod init), the auth service is constructed with our
+ *       bridge proxy from the very start.</li>
+ *   <li><b>Post-launch reflective patch.</b> {@link #patchAuthServices()}
+ *       overwrites the {@code final proxy} field inside the already-built
+ *       {@code YggdrasilAuthenticationService} / {@code MinecraftSessionService} /
+ *       {@code UserApiService} (and {@code Minecraft.proxy}) when the user
+ *       configures a host after launch. This makes a late config take effect
+ *       without restarting the game.</li>
+ *   <li><b>Selector + system properties (everything else).</b> The
+ *       {@link BridgeProxySelector} and {@code https.proxyHost}/
+ *       {@code https.proxyPort} system properties cover <em>every other</em>
+ *       HTTPS call the client makes &mdash; skin/texture/cape downloads, telemetry,
+ *       Realms, the marketplace, and third-party mod HTTPS traffic such as the
+ *       Essential mod&rsquo;s API calls. With {@code authOnly=false} (the new
+ *       default) <em>all</em> HTTPS traffic is routed through the bridge so that a
+ *       PC with no direct internet can still reach every service the game and its
+ *       mods talk to.</li>
+ * </ol>
+ *
+ * <h2>The &ldquo;no new IP&rdquo; guarantee</h2>
+ * <p>The proxy address is the host device's existing LAN IP (the same device that
+ * forwards the game server). No tethering, hotspot or additional IP is created: the
+ * PC opens a normal TCP socket to {@code <bridgeHostIp>:<proxyPort>} on the LAN,
+ * sends an HTTP {@code CONNECT host:443} line, and the Android app tunnels the TLS
+ * bytes to the real internet host. The PC never obtains a new IP address. The raw
+ * TCP game connection to the relay port is a separate socket and is never proxied
+ * (it is not HTTPS).</p>
+ */
+public final class LanBridgeProxyInstaller {
+
+    private static final AtomicReference<Proxy> ACTIVE_PROXY = new AtomicReference<>();
+    private static volatile boolean installed = false;
+    private static volatile boolean earlyInstalled = false;
+    private static ProxySelector previousSelector;
+    private static BridgeProxySelector liveSelector;
+
+    /**
+     * The address of the Android host's UDP relay ({@code bridgeHost:udpRelayPort}).
+     * Set by {@link #install(String)} and read by the {@code DatagramSocketMixin}
+     * on every {@code send()} / {@code receive()}. When {@code null} the mixin
+     * becomes a no-op (no relay configured).
+     */
+    private static final AtomicReference<InetSocketAddress> UDP_RELAY_ADDR = new AtomicReference<>();
+
+    private LanBridgeProxyInstaller() {}
+
+    /**
+     * Hosts whose HTTPS traffic is routed through the bridge when
+     * {@code authOnly} is {@code true}. These cover the full Minecraft Java Edition
+     * authentication and session surface area. When {@code authOnly} is
+     * {@code false} (the default) this set is irrelevant &mdash; everything is
+     * routed.
+     */
+    private static final Set<String> AUTH_HOSTS = new HashSet<>();
+    static {
+        // Microsoft / Xbox Live OAuth
+        AUTH_HOSTS.add("login.live.com");
+        AUTH_HOSTS.add("login.microsoftonline.com");
+        AUTH_HOSTS.add("user.auth.xboxlive.com");
+        AUTH_HOSTS.add("xsts.auth.xboxlive.com");
+        AUTH_HOSTS.add("title.mgt.xboxlive.com");
+        AUTH_HOSTS.add("device.auth.xboxlive.com");
+        AUTH_HOSTS.add("sis.xboxlive.com");
+        // Mojang / Minecraft services
+        AUTH_HOSTS.add("api.minecraftservices.com");
+        AUTH_HOSTS.add("sessionserver.mojang.com");
+        AUTH_HOSTS.add("minecraft.net");
+        AUTH_HOSTS.add("www.minecraft.net");
+        // Skin / texture / asset hosts used during session/profile lookups
+        AUTH_HOSTS.add("textures.minecraft.net");
+        AUTH_HOSTS.add("assets.minecraft.net");
+        AUTH_HOSTS.add("mcassets.cloud");
+        // Session/launchermeta endpoints
+        AUTH_HOSTS.add("launchermeta.mojang.com");
+        AUTH_HOSTS.add("launcher.mojang.com");
+        AUTH_HOSTS.add("piston-meta.mojang.com");
+        // Additional endpoints seen in modern Minecraft auth flows
+        AUTH_HOSTS.add("api.mojang.com");
+        AUTH_HOSTS.add("mojang.com");
+        AUTH_HOSTS.add("account.mojang.com");
+        AUTH_HOSTS.add("premium.minecraft.net");
+    }
+
+    /**
+     * Hosts / host-suffixes whose <strong>UDP</strong> traffic should be routed
+     * through the LAN Bridge UDP relay when {@code routeEssential} is enabled.
+     * These cover the Essential mod&rsquo;s custom ICE/STUN/TURN/QUIC stack, which
+     * uses raw {@link java.net.DatagramSocket} for all of its P2P networking.
+     *
+     * <p>The Essential mod&rsquo;s known infrastructure domains are:
+     * <ul>
+     *   <li>{@code *.stun.essential.gg} &mdash; STUN servers (UDP 3478)</li>
+     *   <li>{@code *.turn.essential.gg} &mdash; TURN relay servers (UDP 3478)</li>
+     *   <li>{@code essential.gg} and subdomains &mdash; general infrastructure</li>
+     * </ul>
+     * In addition, we route <strong>all</strong> non-local UDP traffic when
+     * {@code routeEssential} is on, because the Essential mod also performs
+     * direct peer-to-peer QUIC connections to other players&rsquo; public IPs
+     * (which are not on any known domain). The domain list is a fast-path
+     * optimisation; the real decision is made in {@link #shouldRouteUdp}.</p>
+     */
+    private static final Set<String> ESSENTIAL_UDP_SUFFIXES = new HashSet<>();
+    static {
+        ESSENTIAL_UDP_SUFFIXES.add("essential.gg");
+        ESSENTIAL_UDP_SUFFIXES.add("stun.essential.gg");
+        ESSENTIAL_UDP_SUFFIXES.add("turn.essential.gg");
+    }
+
+    /** @return the currently active bridge {@link Proxy}, or {@code null} if disabled. */
+    public static Proxy getActiveProxy() {
+        return ACTIVE_PROXY.get();
+    }
+
+    /** @return true when the installer has applied a bridge proxy. */
+    public static boolean isInstalled() { return installed; }
+
+    // ===================================================================
+    //  UDP relay infrastructure (used by DatagramSocketMixin)
+    // ===================================================================
+
+    /**
+     * @return the {@link InetSocketAddress} of the Android host&rsquo;s UDP relay
+     *         ({@code bridgeHost:udpRelayPort}), or {@code null} if the UDP relay
+     *         is not configured / disabled. The {@code DatagramSocketMixin} calls
+     *         this on every {@code send()} and {@code receive()}; when it returns
+     *         {@code null} the mixin is a complete no-op.
+     */
+    public static InetSocketAddress getUdpRelayAddress() {
+        return UDP_RELAY_ADDR.get();
+    }
+
+    /**
+     * Check whether a given destination address <em>is</em> the UDP relay itself.
+     * Used by the mixin to avoid an infinite send-loop (we must not re-frame a
+     * packet that is already addressed to the relay).
+     *
+     * @param addr the destination {@link InetAddress} of the datagram
+     * @param port the destination port
+     * @return {@code true} if this is the relay address (so the mixin should let
+     *         the original {@code send()} proceed unmodified)
+     */
+    public static boolean isUdpRelayAddress(InetAddress addr, int port) {
+        InetSocketAddress relay = UDP_RELAY_ADDR.get();
+        if (relay == null || addr == null) return false;
+        if (relay.getPort() != port) return false;
+        InetAddress relayAddr = relay.getAddress();
+        if (relayAddr == null) return false;
+        return relayAddr.equals(addr);
+    }
+
+    /**
+     * Check whether an address is a local / loopback address. The mixin uses this
+     * to avoid routing localhost UDP traffic (e.g. DNS to a local resolver, or
+     * internal IPC) through the relay.
+     *
+     * @param addr the address to test
+     * @return {@code true} if the address is loopback, link-local, or any of the
+     *         machine&rsquo;s own interface addresses
+     */
+    public static boolean isLocalAddress(InetAddress addr) {
+        if (addr == null) return false;
+        try {
+            if (addr.isLoopbackAddress()) return true;
+            if (addr.isLinkLocalAddress()) return true;
+            if (addr.isAnyLocalAddress()) return true;
+        } catch (Throwable ignored) {}
+        // Also treat the relay host's own LAN IP as "local" so we never try to
+        // relay traffic that is already going to the bridge host.
+        InetSocketAddress relay = UDP_RELAY_ADDR.get();
+        if (relay != null && relay.getAddress() != null && relay.getAddress().equals(addr)) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Decide whether a given UDP destination should be routed through the relay.
+     *
+     * <p>When {@code routeEssential} is enabled (the default) we route
+     * <strong>all</strong> non-local, non-relay UDP traffic through the relay.
+     * This is the safe and complete choice: the Essential mod&rsquo;s P2P stack
+     * connects to STUN servers, TURN relays, and &mdash; critically &mdash;
+     * directly to other players&rsquo; public IP addresses (which are not on any
+     * known domain). The only way to catch all of that is to route everything
+     * that is not obviously local.</p>
+     *
+     * <p>When {@code routeEssential} is disabled, we return {@code false} and the
+     * UDP relay is effectively turned off (the mixin lets all sends proceed
+     * directly). This gives users a way to disable the UDP tunnel independently
+     * of the HTTPS/TCP proxy.</p>
+     *
+     * @param dest the real destination of the datagram (before any rewriting)
+     * @return {@code true} if the datagram should be framed and sent to the relay
+     */
+    public static boolean shouldRouteUdp(InetSocketAddress dest) {
+        if (dest == null) return false;
+        // Must have a relay configured.
+        if (UDP_RELAY_ADDR.get() == null) return false;
+        // Must have the feature enabled.
+        if (!LanBridgeConfig.get().isRouteEssential()) return false;
+        InetAddress addr = dest.getAddress();
+        if (addr == null) return false;
+        // Never route local/loopback traffic.
+        if (isLocalAddress(addr)) return false;
+        // Never route traffic already going to the relay.
+        if (isUdpRelayAddress(addr, dest.getPort())) return false;
+        // Route everything else. The Essential mod's P2P connections go to
+        // arbitrary public IPs (other players) and to *.essential.gg STUN/TURN
+        // servers; there is no finite host list we can match against.
+        return true;
+    }
+
+    /**
+     * Patch the proxy inside Minecraft's already-built auth services so that a host
+     * configured <em>after</em> launch (e.g. via the in-game config screen) still
+     * takes effect without restarting the game.
+     *
+     * <p>Forge 1.20.1 field names (official mappings, runtime-stable): the client
+     * class is {@code net.minecraft.client.Minecraft}; it has
+     * {@code private final java.net.Proxy proxy},
+     * {@code private final YggdrasilAuthenticationService authenticationService},
+     * {@code private final MinecraftSessionService minecraftSessionService} and
+     * {@code private final UserApiService userApiService}. Authlib&rsquo;s
+     * {@code HttpAuthenticationService} (the superclass of the Yggdrasil services)
+     * has {@code private final java.net.Proxy proxy}. We locate the
+     * {@code Proxy} field by <em>type</em> so this is robust against any naming
+     * differences.</p>
+     *
+     * <p>This is best-effort: every step is wrapped so a failure never propagates.
+     * Returns {@code true} if at least one field was rewritten.</p>
+     */
+    public static boolean patchAuthServices() {
+        Proxy bridge = ACTIVE_PROXY.get();
+        if (bridge == null) {
+            System.out.println("[LAN Bridge] patchAuthServices: no bridge proxy active, nothing to patch.");
+            return false;
+        }
+        boolean any = false;
+        try {
+            Class<?> mcClass = tryClass("net.minecraft.client.Minecraft");
+            if (mcClass == null) {
+                System.err.println("[LAN Bridge] patchAuthServices: Minecraft class not found.");
+                return false;
+            }
+            Object client = null;
+            try {
+                java.lang.reflect.Method getInstance = mcClass.getMethod("getInstance");
+                client = getInstance.invoke(null);
+            } catch (NoSuchMethodException ignored) {}
+            if (client == null) {
+                System.err.println("[LAN Bridge] patchAuthServices: Minecraft.getInstance() returned null (not yet constructed?).");
+                return false;
+            }
+
+            // Patch Minecraft.proxy (consulted by some non-auth code paths too).
+            any |= setProxyFieldByType(mcClass, client, bridge, "proxy");
+
+            // authenticationService -> its proxy field (HttpAuthenticationService.proxy).
+            Object authService = getFieldValue(client, "authenticationService");
+            if (authService != null) {
+                for (Class<?> c = authService.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                    any |= setProxyFieldByType(c, authService, bridge, "proxy");
+                }
+            }
+
+            // minecraftSessionService (Forge name) — also try sessionService for safety.
+            Object sessionService = getFieldValue(client, "minecraftSessionService");
+            if (sessionService == null) sessionService = getFieldValue(client, "sessionService");
+            if (sessionService != null) {
+                for (Class<?> c = sessionService.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                    any |= setProxyFieldByType(c, sessionService, bridge, "proxy");
+                }
+            }
+
+            // userApiService.
+            Object userApiService = getFieldValue(client, "userApiService");
+            if (userApiService != null) {
+                for (Class<?> c = userApiService.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                    any |= setProxyFieldByType(c, userApiService, bridge, "proxy");
+                }
+            }
+        } catch (Throwable t) {
+            System.err.println("[LAN Bridge] patchAuthServices failed: " + t);
+        }
+        if (any) {
+            System.out.println("[LAN Bridge] patchAuthServices: successfully rewrote auth proxy -> " + bridge);
+        } else {
+            System.err.println("[LAN Bridge] patchAuthServices: no proxy fields were rewritten.");
+        }
+        return any;
+    }
+
+    private static Class<?> tryClass(String... names) {
+        for (String n : names) {
+            try { return Class.forName(n); } catch (ClassNotFoundException ignored) {}
+        }
+        return null;
+    }
+
+    private static Object getFieldValue(Object obj, String fieldName) {
+        if (obj == null) return null;
+        for (Class<?> c = obj.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                Field f = c.getDeclaredField(fieldName);
+                f.setAccessible(true);
+                return f.get(obj);
+            } catch (NoSuchFieldException ignored) {
+            } catch (Throwable t) {
+                System.err.println("[LAN Bridge] getFieldValue(" + fieldName + ") on " + c.getName() + ": " + t);
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static boolean setProxyFieldByType(Class<?> clazz, Object obj, Proxy newProxy, String hintName) {
+        if (clazz == null || obj == null) return false;
+        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+            try {
+                Field f = c.getDeclaredField(hintName);
+                if (f.getType() == Proxy.class) {
+                    f.setAccessible(true);
+                    f.set(obj, newProxy);
+                    return true;
+                }
+            } catch (NoSuchFieldException ignored) {
+            } catch (Throwable t) {
+                System.err.println("[LAN Bridge] setProxyField hint " + c.getName() + "." + hintName + ": " + t);
+            }
+        }
+        for (Class<?> c = clazz; c != null && c != Object.class; c = c.getSuperclass()) {
+            for (Field f : c.getDeclaredFields()) {
+                if (f.getType() == Proxy.class) {
+                    try {
+                        f.setAccessible(true);
+                        f.set(obj, newProxy);
+                        return true;
+                    } catch (Throwable t) {
+                        System.err.println("[LAN Bridge] setProxyField type fallback " + c.getName() + "." + f.getName() + ": " + t);
+                    }
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Install the mutable {@link BridgeProxySelector} as the JVM default
+     * <em>immediately</em>, even if no host is configured yet. Called as early as
+     * possible (from the mod constructor) so Minecraft's cached HTTP clients pick
+     * up our selector from the start. The selector routes direct until a host is
+     * set; when {@link #install(String)} is called later the same selector object
+     * is updated in-place.
+     */
+    public static synchronized void installEarly() {
+        if (earlyInstalled) {
+            return;
+        }
+        previousSelector = ProxySelector.getDefault();
+        liveSelector = new BridgeProxySelector(previousSelector);
+        ProxySelector.setDefault(liveSelector);
+        earlyInstalled = true;
+        installed = true;
+        System.out.println("[LAN Bridge] Early proxy selector installed (no host yet; direct until configured).");
+    }
+
+    /**
+     * Install or refresh the bridge proxy based on the current config. If no host
+     * is configured and no {@code discoveredHost} is supplied, the installer
+     * becomes a no-op (selector stays installed but routes direct).
+     */
+    public static synchronized void install(String discoveredHost) {
+        if (!earlyInstalled) {
+            installEarly();
+        }
+
+        LanBridgeConfig cfg = LanBridgeConfig.get();
+        String host = cfg.hasHost() ? cfg.getBridgeHostIp() : (discoveredHost == null ? "" : discoveredHost);
+
+        if (host == null || host.isEmpty()) {
+            uninstall();
+            return;
+        }
+
+        InetSocketAddress addr = new InetSocketAddress(host, cfg.getProxyPort());
+        if (addr.isUnresolved()) {
+            System.err.println("[LAN Bridge] Could not resolve bridge host '" + host + "'; proxy not installed.");
+            return;
+        }
+
+        Proxy proxy = new Proxy(Proxy.Type.HTTP, addr);
+        ACTIVE_PROXY.set(proxy);
+
+        // Configure the UDP relay address for the DatagramSocketMixin.
+        // When udpRelayPort > 0 the mixin will frame and redirect UDP traffic
+        // (Essential's STUN/TURN/P2P) to this address; when 0 the UDP tunnel
+        // is disabled and the mixin is a no-op.
+        int udpPort = cfg.getUdpRelayPort();
+        if (udpPort > 0) {
+            UDP_RELAY_ADDR.set(new InetSocketAddress(host, udpPort));
+            System.out.println("[LAN Bridge] UDP relay address -> " + host + ":" + udpPort
+                    + " (routeEssential=" + cfg.isRouteEssential() + ")");
+        } else {
+            UDP_RELAY_ADDR.set(null);
+            System.out.println("[LAN Bridge] UDP relay disabled (udpRelayPort=0).");
+        }
+
+        // System properties cover HttpURLConnection + java.net.http.HttpClient +
+        // OkHttp's default proxy resolution (Essential mod, etc.).
+        System.setProperty("https.proxyHost", host);
+        System.setProperty("https.proxyPort", Integer.toString(cfg.getProxyPort()));
+        System.setProperty("http.proxyHost", host);
+        System.setProperty("http.proxyPort", Integer.toString(cfg.getProxyPort()));
+        // Never proxy localhost / the LAN bridge host itself (avoids loops).
+        System.setProperty("https.nonProxyHosts", "localhost|127.*|[::1]");
+        System.setProperty("http.nonProxyHosts", "localhost|127.*|[::1]");
+
+        // Update the live selector IN PLACE so any client that already holds a
+        // reference to it sees the change.
+        if (liveSelector != null) {
+            liveSelector.update(proxy, cfg.isAuthOnly());
+        }
+
+        installed = true;
+
+        // Patch the already-built auth services (authlib's explicit-Proxy path).
+        patchAuthServices();
+
+        System.out.println("[LAN Bridge] Proxy installed -> " + host + ":" + cfg.getProxyPort()
+                + " (authOnly=" + cfg.isAuthOnly() + ")");
+    }
+
+    /** Remove the bridge proxy and restore direct routing. */
+    public static synchronized void uninstall() {
+        ACTIVE_PROXY.set(null);
+        UDP_RELAY_ADDR.set(null);
+        if (liveSelector != null) {
+            liveSelector.update(null, true);
+        }
+        installed = earlyInstalled;
+        System.clearProperty("https.proxyHost");
+        System.clearProperty("https.proxyPort");
+        System.clearProperty("http.proxyHost");
+        System.clearProperty("http.proxyPort");
+        System.clearProperty("https.nonProxyHosts");
+        System.clearProperty("http.nonProxyHosts");
+        System.out.println("[LAN Bridge] Proxy + UDP relay removed (selector now direct).");
+    }
+
+    /**
+     * {@link ProxySelector} that returns the bridge proxy for the configured host
+     * set (or for everything when {@code authOnly} is false) and delegates to the
+     * original selector otherwise. The proxy and authOnly settings are
+     * {@code volatile} and updated in-place via {@link #update(Proxy, boolean)}.
+     */
+    private static final class BridgeProxySelector extends ProxySelector {
+
+        private final ProxySelector delegate;
+        private volatile Proxy bridge;       // null = route direct
+        private volatile boolean authOnly;
+
+        BridgeProxySelector(ProxySelector delegate) {
+            this.delegate = delegate;
+            this.bridge = null;
+            this.authOnly = false; // default: route everything (overridden by update())
+        }
+
+        void update(Proxy bridge, boolean authOnly) {
+            this.bridge = bridge;
+            this.authOnly = authOnly;
+        }
+
+        @Override
+        public List<Proxy> select(URI uri) {
+            Proxy b = bridge;  // snapshot
+            if (b == null) {
+                return delegate == null ? Collections.singletonList(Proxy.NO_PROXY) : delegate.select(uri);
+            }
+            if (uri == null) {
+                return Collections.singletonList(b);
+            }
+            String scheme = uri.getScheme();
+            if (scheme == null) scheme = "";
+            String host = uri.getHost();
+            if (!scheme.equalsIgnoreCase("https") && !scheme.equalsIgnoreCase("http")) {
+                return delegate == null ? Collections.singletonList(Proxy.NO_PROXY) : delegate.select(uri);
+            }
+            if (host != null && isLocalhost(host)) {
+                return Collections.singletonList(Proxy.NO_PROXY);
+            }
+            boolean route;
+            if (authOnly) {
+                route = host != null && shouldRoute(host);
+            } else {
+                route = true; // route ALL HTTPS through the bridge
+            }
+            System.out.println("[LAN Bridge] ProxySelector.select(" + uri + ") -> " + (route ? b : "DIRECT"));
+            if (route) {
+                return Collections.singletonList(b);
+            }
+            return delegate == null ? Collections.singletonList(Proxy.NO_PROXY) : delegate.select(uri);
+        }
+
+        @Override
+        public void connectFailed(URI uri, SocketAddress sa, IOException ioe) {
+            if (delegate != null) {
+                try { delegate.connectFailed(uri, sa, ioe); } catch (Exception ignored) {}
+            }
+        }
+
+        private static boolean shouldRoute(String host) {
+            if (host == null) return false;
+            String h = host.toLowerCase();
+            if (AUTH_HOSTS.contains(h)) return true;
+            for (String suffix : AUTH_HOSTS) {
+                if (h.endsWith("." + suffix)) return true;
+            }
+            return false;
+        }
+
+        private static boolean isLocalhost(String host) {
+            if (host == null) return false;
+            String h = host.toLowerCase();
+            return h.equals("localhost") || h.equals("127.0.0.1") || h.equals("::1") || h.startsWith("127.");
+        }
+    }
+}
+
+===== forge-src/com/ninjatech/lanbridge/LanBridge.java =====
+package com.ninjatech.lanbridge;
+
+import com.ninjatech.lanbridge.client.ClientProxy;
+import com.ninjatech.lanbridge.config.LanBridgeConfig;
+import com.ninjatech.lanbridge.proxy.LanBridgeProxyInstaller;
+import net.minecraftforge.common.MinecraftForge;
+import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.fml.DistExecutor;
+import net.minecraftforge.fml.common.Mod;
+import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
+import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+/**
+ * Main Forge mod class for the LAN Bridge (Forge 1.20.1).
+ *
+ * <p>The mod's job is simple: install a JVM-wide HTTP proxy pointing at the Android
+ * host device's CONNECT-tunnel proxy so that the Minecraft client's authentication,
+ * session and profile HTTPS requests travel over the existing LAN \u2014 no new IP, no
+ * tethering.</p>
+ *
+ * <p>The actual proxy installation runs on the client side only (see
+ * {@link ClientProxy}). On the dedicated server this mod is effectively a no-op.</p>
+ */
+@Mod(LanBridge.MODID)
+public class LanBridge {
+
+    public static final String MODID = "lanbridge";
+    public static final Logger LOGGER = LogManager.getLogger(MODID);
+
+    private static LanBridge INSTANCE;
+
+    public LanBridge() {
+        INSTANCE = this;
+        // Eagerly load / create the config file.
+        LanBridgeConfig cfg = LanBridgeConfig.get();
+
+        // Install the mutable proxy selector IMMEDIATELY — before Minecraft
+        // builds its cached HttpClient. This is the key timing fix: if we wait
+        // until FMLClientSetupEvent (or the user clicking Apply in the config
+        // screen), the already-built HttpClient will never see our selector and
+        // auth traffic goes direct ("authentication servers are currently
+        // unreachable"). The early selector routes direct until a host is set.
+        LanBridgeProxyInstaller.installEarly();
+        if (cfg.hasHost()) {
+            LanBridgeProxyInstaller.install(null);
+            LOGGER.info("[LAN Bridge] Proxy installed from config -> {}:{}", cfg.getBridgeHostIp(), cfg.getProxyPort());
+        }
+
+        IEventBus modBus = FMLJavaModLoadingContext.get().getModEventBus();
+        modBus.addListener(this::commonSetup);
+
+        // Register the client-side proxy (safe for dedicated server via DistExecutor).
+        DistExecutor.unsafeRunWhenOn(net.minecraftforge.api.distmarker.Dist.CLIENT,
+                () -> () -> ClientProxy.init(modBus));
+
+        // Register ourselves for server / other game events.
+        MinecraftForge.EVENT_BUS.register(this);
+
+        LOGGER.info("LAN Bridge mod constructing.");
+    }
+
+    private void commonSetup(final FMLCommonSetupEvent event) {
+        LOGGER.info("LAN Bridge common setup complete. Configure via config/lanbridge.json.");
+    }
+
+    public static LanBridge getInstance() {
+        return INSTANCE;
+    }
+}
+
