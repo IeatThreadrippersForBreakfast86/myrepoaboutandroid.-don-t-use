@@ -1,0 +1,421 @@
+name: Build LanBridge - Experimental UDP/Discovery Fix
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Locate source JAR
+        id: source
+        shell: bash
+        run: |
+          set -e
+
+          JAR="$(find . -type f \
+            \( -name 'lanbridge-1.1.0-sources.jar' \
+            -o -iname '*lanbridge*sources*.jar' \) \
+            | head -n 1)"
+
+          if [ -z "$JAR" ]; then
+            echo "::error::Could not find the LanBridge source JAR."
+            find . -maxdepth 5 -type f | sort | head -300
+            exit 1
+          fi
+
+          echo "Found source JAR: $JAR"
+          echo "jar=$JAR" >> "$GITHUB_OUTPUT"
+
+      - name: Extract source
+        shell: bash
+        run: |
+          set -e
+
+          rm -rf patched-source
+          mkdir -p patched-source
+
+          unzip -oq "${{ steps.source.outputs.jar }}" -d patched-source
+
+          echo "Extracted source:"
+          find patched-source -type f | sort
+
+      - name: Locate discovery source
+        id: discovery
+        shell: bash
+        run: |
+          set -e
+
+          FILE="$(find patched-source -type f \
+            -name 'LanBridgeDiscovery.java' \
+            | head -n 1)"
+
+          if [ -z "$FILE" ]; then
+            echo "::error::LanBridgeDiscovery.java was not found."
+            exit 1
+          fi
+
+          echo "Discovery source: $FILE"
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+
+      - name: Patch LAN discovery
+        shell: python
+        run: |
+          from pathlib import Path
+          import re
+
+          path = Path("${{ steps.discovery.outputs.file }}")
+          text = path.read_text()
+
+          # Add the networking imports if they aren't already present.
+          imports = [
+              "import java.net.Inet4Address;",
+              "import java.net.InterfaceAddress;",
+              "import java.net.NetworkInterface;",
+              "import java.net.SocketTimeoutException;",
+              "import java.util.ArrayList;",
+              "import java.util.Enumeration;",
+              "import java.util.List;",
+              "import java.util.concurrent.Callable;",
+              "import java.util.concurrent.ExecutorService;",
+              "import java.util.concurrent.Executors;",
+              "import java.util.concurrent.Future;",
+          ]
+
+          marker = "import java.net."
+          existing = set(re.findall(r"import [^;]+;", text))
+
+          missing = [x for x in imports if x not in existing]
+
+          if missing:
+              # Put the imports immediately after the package declaration.
+              m = re.search(r"^(package [^;]+;\s*)", text, re.MULTILINE)
+              if not m:
+                  raise RuntimeError("Could not find package declaration")
+
+              text = (
+                  text[:m.end()]
+                  + "\n"
+                  + "\n".join(missing)
+                  + "\n"
+                  + text[m.end():]
+              )
+
+          # Replace the old candidate generator if it has the known /24
+          # implementation. We deliberately keep the rest of discovery,
+          # including /__lanbridge_info and BridgeInfo parsing, unchanged.
+          pattern = re.compile(
+              r"(?s)"
+              r"(private\s+static\s+List<InetAddress>\s+collectCandidateIps\s*\([^)]*\)\s*\{)"
+              r".*?"
+              r"(\n\s*\})"
+          )
+
+          replacement = r'''private static List<InetAddress> collectCandidateIps() {
+          List<InetAddress> candidates = new ArrayList<>();
+
+          try {
+              Enumeration<NetworkInterface> interfaces =
+                      NetworkInterface.getNetworkInterfaces();
+
+              while (interfaces.hasMoreElements()) {
+                  NetworkInterface ni = interfaces.nextElement();
+
+                  if (!ni.isUp() || ni.isLoopback() || ni.isVirtual()) {
+                      continue;
+                  }
+
+                  for (InterfaceAddress ia : ni.getInterfaceAddresses()) {
+                      InetAddress address = ia.getAddress();
+
+                      if (!(address instanceof Inet4Address)) {
+                          continue;
+                      }
+
+                      if (address.isLoopback() || address.isLinkLocalAddress()) {
+                          continue;
+                      }
+
+                      short prefix = ia.getNetworkPrefixLength();
+
+                      if (prefix < 0 || prefix > 32) {
+                          continue;
+                      }
+
+                      byte[] addr = address.getAddress();
+
+                      int ip =
+                              ((addr[0] & 0xff) << 24)
+                            | ((addr[1] & 0xff) << 16)
+                            | ((addr[2] & 0xff) << 8)
+                            |  (addr[3] & 0xff);
+
+                      int mask = prefix == 0
+                              ? 0
+                              : (int) (0xffffffffL << (32 - prefix));
+
+                      int network = ip & mask;
+                      int broadcast = network | ~mask;
+
+                      // Avoid scanning enormous networks.
+                      long hostCount =
+                              (broadcast & 0xffffffffL)
+                            - (network & 0xffffffffL)
+                            - 1;
+
+                      if (hostCount <= 0 || hostCount > 4096) {
+                          continue;
+                      }
+
+                      for (int value = network + 1; value < broadcast; value++) {
+                          if (value == ip) {
+                              continue;
+                          }
+
+                          byte[] candidate = new byte[] {
+                              (byte) (value >>> 24),
+                              (byte) (value >>> 16),
+                              (byte) (value >>> 8),
+                              (byte) value
+                          };
+
+                          try {
+                              candidates.add(InetAddress.getByAddress(candidate));
+                          } catch (Exception ignored) {
+                              // Ignore malformed candidates.
+                          }
+                      }
+                  }
+              }
+          } catch (Exception ignored) {
+              // Discovery will simply return no bridge if interfaces cannot
+              // be enumerated.
+          }
+
+          return candidates;
+      }'''
+
+          if pattern.search(text):
+              text = pattern.sub(replacement, text, count=1)
+          else:
+              print("WARNING: Known collectCandidateIps signature was not found.")
+              print("The source may already contain a newer implementation.")
+              print("No discovery method was replaced.")
+
+          path.write_text(text)
+
+          print("\n===== PATCHED LanBridgeDiscovery =====")
+          print(path.read_text())
+
+      - name: Verify UDP relay is still present
+        shell: bash
+        run: |
+          set -e
+
+          echo "Checking that UDP relay support remains in the source..."
+
+          if ! grep -RniE \
+            'udpRelayPort|Udp|UDP|relay' \
+            patched-source \
+            >/tmp/udp-check.txt 2>&1; then
+            echo "::error::Could not find UDP relay implementation."
+            cat /tmp/udp-check.txt || true
+            exit 1
+          fi
+
+          cat /tmp/udp-check.txt
+
+      - name: Prepare Forge 1.20.1 build environment
+        shell: bash
+        run: |
+          set -e
+
+          rm -rf build-project
+          mkdir -p build-project
+
+          cd build-project
+
+          curl -L --fail \
+            -o forge-installer.jar \
+            https://maven.minecraftforge.net/net/minecraftforge/forge/1.20.1-47.2.0/forge-1.20.1-47.2.0-installer.jar
+
+          java -jar forge-installer.jar \
+            --installServer
+
+          rm -f forge-installer.jar
+
+      - name: Copy patched source into Forge project
+        shell: bash
+        run: |
+          set -e
+
+          mkdir -p build-project/src/main/java
+          mkdir -p build-project/src/main/resources
+
+          # Copy the extracted Java source tree.
+          if [ -d patched-source/forge-src ]; then
+            cp -R patched-source/forge-src/. build-project/src/main/java/
+          else
+            # Source JARs normally contain the package tree directly.
+            cp -R patched-source/. build-project/src/main/java/
+          fi
+
+          # Copy resources if the source archive contains them.
+          if [ -d patched-source/src/main/resources ]; then
+            cp -R patched-source/src/main/resources/. \
+              build-project/src/main/resources/
+          fi
+
+          echo "Build source tree:"
+          find build-project/src -type f | sort | head -500
+
+      - name: Create Forge build files
+        shell: bash
+        run: |
+          set -e
+
+          cat > build-project/settings.gradle <<'EOF'
+          pluginManagement {
+              repositories {
+                  gradlePluginPortal()
+                  maven { url = 'https://maven.minecraftforge.net' }
+              }
+          }
+
+          rootProject.name = 'lanbridge-experimental'
+          EOF
+
+          cat > build-project/build.gradle <<'EOF'
+          plugins {
+              id 'net.minecraftforge.gradle' version '[6.0,6.2)'
+          }
+
+          group = 'com.ninjatech'
+          version = '1.1.0-experimental'
+
+          java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+
+          minecraft {
+              mappings channel: 'official', version: '1.20.1'
+
+              copyIdeResources = true
+
+              runs {
+                  client {
+                      workingDirectory project.file('run')
+
+                      property 'forge.logging.markers', 'REGISTRIES'
+                      property 'forge.logging.console.level', 'debug'
+
+                      mods {
+                          lanbridge {
+                              source sourceSets.main
+                          }
+                      }
+                  }
+              }
+          }
+
+          repositories {
+              mavenCentral()
+              maven { url = 'https://maven.minecraftforge.net' }
+          }
+
+          dependencies {
+              minecraft 'net.minecraftforge:forge:1.20.1-47.2.0'
+          }
+
+          tasks.withType(JavaCompile).configureEach {
+              options.encoding = 'UTF-8'
+          }
+
+          jar {
+              archiveBaseName = 'lanbridge'
+              archiveVersion = '1.1.0-experimental'
+          }
+          EOF
+
+      - name: Build
+        working-directory: build-project
+        shell: bash
+        run: |
+          set -e
+
+          chmod +x gradlew
+
+          ./gradlew \
+            --no-daemon \
+            --stacktrace \
+            build
+
+      - name: Locate built JAR
+        id: jar
+        shell: bash
+        run: |
+          set -e
+
+          JAR="$(find build-project/build/libs \
+            -maxdepth 1 \
+            -type f \
+            -name '*.jar' \
+            ! -name '*-sources.jar' \
+            ! -name '*-dev.jar' \
+            | head -n 1)"
+
+          if [ -z "$JAR" ]; then
+            echo "::error::No built JAR found."
+            find build-project/build -type f | sort
+            exit 1
+          fi
+
+          echo "Built JAR:"
+          ls -lh "$JAR"
+
+          echo "jar=$JAR" >> "$GITHUB_OUTPUT"
+
+      - name: Upload experimental JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanbridge-1.1.0-experimental
+          path: ${{ steps.jar.outputs.jar }}
+          retention-days: 30
+
+      - name: Upload patched source
+        uses: actions/upload-artifact@v4
+        with:
+          name: lanbridge-1.1.0-patched-source
+          path: patched-source
+          retention-days: 30
+
+      - name: Commit patched source and build project
+        shell: bash
+        run: |
+          set -e
+
+          # Keep the repository useful for the next iteration.
+          mkdir -p experimental
+
+          cp "${{ steps.jar.outputs.jar }}" \
+            experimental/lanbridge-1.1.0-experimental.jar
+
+          cp "${{ steps.discovery.outputs.file }}" \
+            experimental/LanBridgeDiscovery.java
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add experimental
+
+          if git diff --cached --quiet; then
+            echo "No repository changes."
+          else
+            git commit -m "Experimental LAN discovery and UDP build"
+            git push
+          fi
