@@ -1,4 +1,4 @@
-name: Extract LanBridge Protocol
+name: Extract LanBridge Methods
 
 on:
   workflow_dispatch:
@@ -6,7 +6,6 @@ on:
 jobs:
   extract:
     runs-on: ubuntu-latest
-
     permissions:
       contents: write
 
@@ -30,76 +29,86 @@ jobs:
             -d apk-analysis/decompiled \
             _workspace_outputs_MinecraftLANBridge-v1.1-debug.apk || true
 
-      - name: Extract exact Android files
+      - name: Extract exact Android methods
         run: |
-          mkdir -p protocol-analysis
+          mkdir -p method-analysis
 
-          find apk-analysis/decompiled -type f \
-            -name 'HttpProxyServer.java' \
-            -exec cp {} protocol-analysis/HttpProxyServer.java \;
+          HTTP=$(find apk-analysis/decompiled -name 'HttpProxyServer.java' | head -n 1)
+          SERVICE=$(find apk-analysis/decompiled -name 'BridgeService.java' | head -n 1)
 
-          find apk-analysis/decompiled -type f \
-            -name 'BridgeService.java' \
-            -exec cp {} protocol-analysis/BridgeService.java \;
+          echo "HttpProxyServer: $HTTP"
+          echo "BridgeService: $SERVICE"
 
-          find apk-analysis/decompiled -type f \
-            -name 'BridgeConfig.java' \
-            -exec cp {} protocol-analysis/BridgeConfig.java \;
+          if [ -n "$HTTP" ]; then
+            grep -n -A120 -B30 \
+              -E 'serveDiscovery|__lanbridge_info|start\(' \
+              "$HTTP" \
+              > method-analysis/android-http-proxy.txt || true
+          fi
 
-      - name: Extract Forge discovery source
-        run: |
-          mkdir -p protocol-analysis/forge
+          if [ -n "$SERVICE" ]; then
+            grep -n -A120 -B30 \
+              -E 'startBridge|HttpProxyServer|proxyPort|udpRelayPort' \
+              "$SERVICE" \
+              > method-analysis/android-bridge-service.txt || true
+          fi
 
-          find forge-src -type f \
-            -iname '*Discovery*.java' \
-            -exec cp {} protocol-analysis/forge/ \; 2>/dev/null || true
-
-          find forge-src -type f \
-            -iname '*ProxyInstaller*.java' \
-            -exec cp {} protocol-analysis/forge/ \; 2>/dev/null || true
-
-      - name: Extract source JAR if needed
+      - name: Extract Forge source
         run: |
           mkdir -p forge-src
 
-          SOURCE_JAR="$(find . -type f \
+          SOURCE_JAR=$(find . -type f \
             \( -name 'lanbridge-1.1.0-sources.jar' \
             -o -iname '*sources*.jar' \) \
-            | head -n 1)"
+            | head -n 1)
+
+          echo "Source JAR: $SOURCE_JAR"
 
           if [ -n "$SOURCE_JAR" ]; then
             unzip -oq "$SOURCE_JAR" -d forge-src
           fi
 
+      - name: Extract Forge discovery methods
+        run: |
+          mkdir -p method-analysis
+
           find forge-src -type f \
-            \( -iname '*Discovery*.java' \
-            -o -iname '*ProxyInstaller*.java' \) \
-            -exec cp {} protocol-analysis/forge/ \; \
-            2>/dev/null || true
+            \( -name '*.java' -o -name '*.kt' \) \
+            -exec grep -liE \
+              '__lanbridge_info|discover|DiscoveryInfo|proxyPort|gameRelayPort|udpRelayPort' \
+              {} \; \
+            > method-analysis/forge-files.txt || true
 
-      - name: Make protocol search
+          while IFS= read -r FILE; do
+            echo "===== $FILE ====="
+            grep -n -A120 -B30 \
+              -E '__lanbridge_info|discover|DiscoveryInfo|proxyPort|gameRelayPort|udpRelayPort' \
+              "$FILE" || true
+            echo
+          done < method-analysis/forge-files.txt \
+            > method-analysis/forge-discovery.txt
+
+      - name: Show generated files
         run: |
-          grep -RniE \
-            '__lanbridge_info|DiscoveryInfo|proxyPort|gameRelayPort|udpRelayPort|25580|25581|25565|HttpURLConnection|ServerSocket|bind|listen|all.?traffic' \
-            protocol-analysis \
-            > protocol-analysis/search-results.txt || true
+          echo "===== FILES ====="
+          find method-analysis -type f -maxdepth 1 -print
 
-      - name: Make file listing
-        run: |
-          find protocol-analysis -type f -print \
-            | sort \
-            > protocol-analysis/files.txt
+          echo "===== ANDROID DISCOVERY ====="
+          cat method-analysis/android-http-proxy.txt || true
 
-      - name: Commit results
+          echo "===== FORGE DISCOVERY ====="
+          cat method-analysis/forge-discovery.txt || true
+
+      - name: Commit
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add protocol-analysis
+          git add method-analysis
 
           if git diff --cached --quiet; then
-            echo "Nothing changed."
+            echo "No changes."
           else
-            git commit -m "Extract LanBridge protocol implementation"
+            git commit -m "Extract LanBridge discovery methods"
             git push
           fi
