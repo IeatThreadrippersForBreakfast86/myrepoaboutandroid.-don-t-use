@@ -6,6 +6,7 @@ on:
 jobs:
   analyze:
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
 
@@ -22,32 +23,100 @@ jobs:
         run: |
           rm -rf apk-analysis
           mkdir -p apk-analysis
-          ./jadx/bin/jadx --deobf --show-bad-code \
+
+          ./jadx/bin/jadx \
+            --deobf \
+            --show-bad-code \
             -d apk-analysis/decompiled \
             _workspace_outputs_MinecraftLANBridge-v1.1-debug.apk || true
 
-      - name: Extract targeted source
+      - name: Extract Android networking source
         run: |
           mkdir -p analysis-targets
 
           find apk-analysis/decompiled -type f \
-            \( -name 'HttpProxyServer.java' \
-            -o -name 'BridgeService.java' \
-            -o -name 'BridgeConfig.java' \) \
-            -exec sh -c 'for f; do echo "===== $f ====="; cat "$f"; echo; done' sh {} + \
+            \( \
+              -name 'HttpProxyServer.java' \
+              -o -name 'BridgeService.java' \
+              -o -name 'BridgeConfig.java' \
+              -o -name 'TcpRelayEngine.java' \
+              -o -name 'UdpRelayEngine.java' \
+              -o -name 'NetworkUtils.java' \
+            \) \
+            -exec sh -c '
+              for f; do
+                echo "===== $f ====="
+                cat "$f"
+                echo
+              done
+            ' sh {} + \
             > analysis-targets/android-networking.txt
 
+      - name: Search Android networking code
+        run: |
           grep -RniE \
-            '__lanbridge_info|25580|25581|discovery|lanbridge' \
+            '__lanbridge_info|25580|25581|discovery|DiscoveryInfo|ProxyConfig|lanbridge|all.?traffic|proxy' \
             apk-analysis/decompiled \
             > analysis-targets/android-network-search.txt || true
 
+      - name: Find source JAR
+        run: |
+          echo "Looking for LanBridge source JAR..."
+
           find . -type f \
+            \( -name '*.jar' -o -name '*.zip' \) \
+            -print \
+            > analysis-targets/archive-list.txt
+
+          echo
+          echo "Archives found:"
+          cat analysis-targets/archive-list.txt
+
+      - name: Extract Forge source JAR
+        run: |
+          mkdir -p forge-src
+
+          SOURCE_JAR="$(find . -type f -name 'lanbridge-1.1.0-sources.jar' | head -n 1)"
+
+          if [ -z "$SOURCE_JAR" ]; then
+            echo "ERROR: lanbridge-1.1.0-sources.jar was not found."
+            echo "Searching for other source archives..."
+
+            SOURCE_JAR="$(find . -type f \
+              \( -iname '*sources*.jar' -o -iname '*sources*.zip' \) \
+              | head -n 1)"
+          fi
+
+          if [ -z "$SOURCE_JAR" ]; then
+            echo "WARNING: No source archive found."
+            exit 0
+          fi
+
+          echo "Using source archive:"
+          echo "$SOURCE_JAR"
+
+          case "$SOURCE_JAR" in
+            *.jar)
+              unzip -oq "$SOURCE_JAR" -d forge-src
+              ;;
+            *.zip)
+              unzip -oq "$SOURCE_JAR" -d forge-src
+              ;;
+          esac
+
+      - name: Extract Forge networking source
+        run: |
+          mkdir -p analysis-targets
+
+          find forge-src -type f \
             \( -name '*.java' -o -name '*.kt' \) \
-            ! -path './apk-analysis/*' \
             -exec grep -liE \
-              '__lanbridge_info|25580|25581|discovery|lanbridge' {} \; \
+              '__lanbridge_info|25580|25581|discovery|DiscoveryInfo|ProxyConfig|lanbridge|all.?traffic|proxy' \
+              {} \; \
             > analysis-targets/forge-network-files.txt || true
+
+          echo "Forge files matching networking/discovery terms:"
+          cat analysis-targets/forge-network-files.txt || true
 
           while IFS= read -r f; do
             echo "===== $f ====="
@@ -56,10 +125,47 @@ jobs:
           done < analysis-targets/forge-network-files.txt \
             > analysis-targets/forge-networking.txt || true
 
+      - name: Extract Forge source tree listing
+        run: |
+          find forge-src -type f \
+            | sort \
+            > analysis-targets/forge-source-tree.txt
+
+      - name: Extract relevant strings from APK
+        run: |
+          grep -RniE \
+            'lanbridge|__lanbridge_info|25565|25580|25581|all.?traffic|proxy|discovery' \
+            apk-analysis/decompiled \
+            > analysis-targets/apk-relevant-strings.txt || true
+
+      - name: Create summary
+        run: |
+          {
+            echo "# LanBridge APK Analysis"
+            echo
+            echo "## Android networking files"
+            wc -l analysis-targets/android-networking.txt || true
+            echo
+            echo "## Android search results"
+            wc -l analysis-targets/android-network-search.txt || true
+            echo
+            echo "## Forge networking files"
+            wc -l analysis-targets/forge-networking.txt || true
+            echo
+            echo "## Forge source tree"
+            wc -l analysis-targets/forge-source-tree.txt || true
+          } > analysis-targets/README.md
+
       - name: Commit analysis
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add analysis-targets
-          git diff --cached --quiet || git commit -m "Extract LanBridge networking sources"
-          git push
+
+          git add analysis-targets apk-analysis
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+          else
+            git commit -m "Extract LanBridge Android and Forge networking sources"
+            git push
+          fi
